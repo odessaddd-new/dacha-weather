@@ -1,5 +1,31 @@
 <!doctype html>
 <html lang="uk">
+<!--
+  ============================================================================================
+  «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
+  ВЕРСІЯ СТОРІНКИ: 1.2.0 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ============================================================================================
+  Що змінилось:
+    1.2.0  Опади — одразу після температури; графік «Напруга мережі» — останнім (з'являється, лише якщо
+           в Apps Script увімкнено PUBLIC_VOLT=1); у підвалі видно версію сторінки.
+    1.1.0  (скасовано) знімок раз на хвилину.
+    1.0.x  Перший випуск: поточна погода, кнопка «Надіслати мені погоду», графіки 24 год / 7 діб.
+
+  КАРТА СТОРІНКИ (де що шукати нижче в коді):
+    HTML      <main> — заголовок, блок «зараз» (#now), кнопка (#send), перемикач 24 год/7 діб (#seg),
+              контейнер графіків (#charts), підвал (#foot) з версією.
+    СКРИПТ    ЗАВАНТАЖЕННЯ ДАНИХ:  api(), load()            — запит історії в Apps Script
+              ВИВЕДЕННЯ:           render()                 — блок «зараз» + ПОРЯДОК ГРАФІКІВ (див. нижче)
+                                   card()                   — обгортка «картка з заголовком»
+              ДАНІ ДЛЯ ГРАФІКІВ:   rainBuckets()            — опади по годинах із приростів лічильника
+              МАЛЮВАННЯ ГРАФІКІВ:  niceTicks(), timeAxis()  — підписи осей
+                                   lineChart()              — лінійний графік (температура, тиск, вітер, напруга)
+                                   barChart()               — стовпчики (опади)
+                                   showTip(), attachTip()   — підказка при дотику
+              КНОПКА:              updateButton(), sendRequest() — «Надіслати мені погоду»
+    ПОРЯДОК ГРАФІКІВ задається у render(): Температура → Опади → Тиск → Вітер → Напруга мережі.
+    Щоб змінити порядок — переставте відповідні рядки box.appendChild(card(...)) у render().
+-->
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -33,6 +59,7 @@
   main { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
   h1 { font-size: 22px; margin: 4px 0 2px; }
   .sub { color: var(--hint); font-size: 14px; margin-bottom: 14px; }
+  .ver { opacity: .8; }
   .sub.stale { color: var(--warn); }
   .now { background: var(--card); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 10px 12px; }
   .now .big { grid-row: span 2; display: flex; flex-direction: column; justify-content: center; }
@@ -82,7 +109,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot">Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.2.0 (27.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -91,10 +118,15 @@
 // Адреса веб-застосунку Apps Script (розгортання → Web app). Це НЕ секрет, але без неї сторінка не працюватиме.
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
+// Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
+const PAGE_VERSION = "1.2.0 (27.10.2026)";
+const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
+
 const tg = window.Telegram && window.Telegram.WebApp;
 if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 
 const $ = (id) => document.getElementById(id);
+// Номери стовпців у рядку історії (у тому ж порядку, що заголовки аркуша «snapshots» у таблиці).
 const COL = { ts: 0, temp: 1, hum: 2, press: 3, wind: 4, gust: 5, rain_1h: 6, rain_day: 7, raining: 8, night_min: 9, volt: 10, st_ok: 11 };
 let hours = 24;
 let data = null;
@@ -112,11 +144,14 @@ function agoText(sec) {
 }
 function setNote(text, cls) { const n = $("note"); n.textContent = text || ""; n.className = "note" + (cls ? " " + cls : ""); }
 
+// ===== ЗАВАНТАЖЕННЯ ДАНИХ =====
+// api(): запит до Apps Script (GET ?action=history&hours=…) або POST для кнопки; повертає розібрану JSON-відповідь.
 async function api(path, opts) {
   const r = await fetch(API_URL + path, opts);
   return r.json();
 }
 
+// load(): завантажує історію за обраний період (hours) і викликає render(); при помилці показує повідомлення.
 async function load() {
   if (!API_URL || API_URL.indexOf("PASTE_") === 0) {
     $("updated").textContent = "Сторінка ще не налаштована: не вказано адресу сервісу.";
@@ -136,6 +171,9 @@ async function load() {
   updateButton();
 }
 
+// ===== ВИВЕДЕННЯ =====
+// render(): 1) блок «зараз» зверху (з останнього знімка); 2) ГРАФІКИ в порядку:
+//   Температура → Опади → Тиск → Вітер → Напруга мережі (останнім, лише якщо є дані напруги).
 function render() {
   const rows = data.rows || [];
   const latest = data.latest;
@@ -173,6 +211,7 @@ function render() {
   }
 }
 
+// card(title, el, small): картка з заголовком; small — дрібний підпис праворуч від заголовка.
 function card(title, el, small) {
   const c = document.createElement("div");
   c.className = "card";
@@ -184,6 +223,7 @@ function card(title, el, small) {
   return c;
 }
 
+// ===== ДАНІ ДЛЯ ГРАФІКІВ =====
 // ---- опади за інтервалами з приростів добового лічильника (скидання лічильника — приріст = нове значення)
 function rainBuckets(rows, step) {
   const out = new Map();
@@ -207,6 +247,7 @@ function rainBuckets(rows, step) {
   return res;
 }
 
+// ===== МАЛЮВАННЯ ГРАФІКІВ (SVG) =====
 // ---- графіки на SVG
 const NS = "http://www.w3.org/2000/svg";
 function el(name, attrs, parent) {
@@ -215,6 +256,7 @@ function el(name, attrs, parent) {
   if (parent) parent.appendChild(e);
   return e;
 }
+// niceTicks(lo, hi, n): «гарні» значення для горизонтальних ліній і підписів осі Y.
 function niceTicks(lo, hi, n) {
   if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
   const raw = (hi - lo) / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
@@ -225,6 +267,7 @@ function niceTicks(lo, hi, n) {
 }
 const W = 520, H = 190, PL = 34, PR = 10, PT = 8, PB = 22;
 
+// timeAxis(): вертикальні лінії та підписи часу (24 год — кожні 6 год; 7 діб — по днях).
 function timeAxis(svg, t0, t1, x) {
   const g = el("g", { class: "axis" }, svg);
   const span = t1 - t0;
@@ -240,6 +283,8 @@ function timeAxis(svg, t0, t1, x) {
   void span;
 }
 
+// lineChart(rows, series, o): лінійний графік. series — список ліній {i: стовпець, color, name, unit};
+// o.dec — знаків після коми, o.min0 — починати вісь з нуля. Пропуск у даних дає розрив лінії.
 function lineChart(rows, series, o) {
   const wrap = document.createElement("div");
   const pts = rows.filter((r) => series.some((s) => r[s.i] !== null));
@@ -277,6 +322,7 @@ function lineChart(rows, series, o) {
   return wrap;
 }
 
+// barChart(buckets, unitLabel): стовпчики (використовується для опадів).
 function barChart(buckets, unitLabel) {
   const wrap = document.createElement("div");
   if (!buckets.length) { wrap.className = "empty"; wrap.textContent = "Недостатньо даних"; return wrap; }
@@ -308,6 +354,7 @@ function barChart(buckets, unitLabel) {
 
 // ---- підказка при дотику/наведенні
 let tipTimer = null;
+// showTip(): коротка підказка зі значенням при дотику до графіка.
 function showTip(px, py, text) {
   const t = $("tip");
   t.textContent = text;
@@ -317,6 +364,7 @@ function showTip(px, py, text) {
   clearTimeout(tipTimer);
   tipTimer = setTimeout(() => { t.style.opacity = 0; }, 2500);
 }
+// attachTip(): вішає на графік обробники дотику/миші — показує значення останньої лінії графіка в точці дотику.
 function attachTip(svg, rows, series, x, y, o) {
   const pick = (ev) => {
     const rect = svg.getBoundingClientRect();
@@ -337,6 +385,8 @@ function attachTip(svg, rows, series, x, y, o) {
 }
 
 // ---- кнопка «Надіслати мені погоду»
+// ===== КНОПКА «Надіслати мені погоду» =====
+// updateButton(): вмикає/вимикає кнопку (працює лише коли сторінку відкрито з Telegram) і показує підказку під нею.
 function updateButton() {
   const b = $("send");
   const inTg = !!(tg && tg.initData);
@@ -344,10 +394,12 @@ function updateButton() {
   b.disabled = !(inTg && ready);
   if (!inTg) setNote("Щоб отримати погоду в чат, відкрийте цю сторінку з Telegram. Якщо ви вже в Telegram, а кнопка недоступна — Telegram не передав дані користувача (діагностика: initData порожній).", "");
   else if (!$("note").textContent) setNote(showName
-    ? ""
+    ? "Адміністратор каналу побачить ваше ім'я та нік у Telegram, коли ви надсилаєте запит."
     : "Адміністратор каналу побачить, що хтось надіслав запит (без імені).", "");
 }
 
+// sendRequest(retry): надсилає запит у Apps Script (action=send) з підписаними даними Telegram (initData);
+// сервіс надсилає погоду особисто в чат. retry — повтор після того, як користувач дозволив боту писати.
 async function sendRequest(retry) {
   const b = $("send");
   b.disabled = true;
@@ -393,4 +445,3 @@ load();
 </script>
 </body>
 </html>
-аа
