@@ -21,6 +21,7 @@
     --c-wind: #2b9bb0;
     --c-gust: #9bb7c4;
     --c-rain: #3b86c9;
+    --c-volt: #d4a017;
     --grid: rgba(120, 140, 160, .25);
   }
   @media (prefers-color-scheme: dark) {
@@ -159,13 +160,17 @@ function render() {
   const box = $("charts");
   box.innerHTML = "";
   box.appendChild(card("Температура, °C", lineChart(rows, [{ i: COL.temp, color: "var(--c-temp)", name: "Температура", unit: "°C" }], { dec: 1 })));
+  const rain = rainBuckets(rows, hours <= 24 ? 3600 : 6 * 3600);
+  const total = rain.reduce((s, b) => s + b.v, 0);
+  box.appendChild(card("Опади, мм", barChart(rain, hours <= 24 ? "за годину" : "за 6 год"), "усього " + fmt(total) + " мм"));
   box.appendChild(card("Тиск, мм рт. ст.", lineChart(rows, [{ i: COL.press, color: "var(--c-press)", name: "Тиск", unit: "мм" }], { dec: 0 })));
   box.appendChild(card("Вітер, м/с", lineChart(rows, [
     { i: COL.gust, color: "var(--c-gust)", name: "Пориви", unit: "м/с" },
     { i: COL.wind, color: "var(--c-wind)", name: "Вітер", unit: "м/с" }], { dec: 1, min0: true })));
-  const rain = rainBuckets(rows, hours <= 24 ? 3600 : 6 * 3600);
-  const total = rain.reduce((s, b) => s + b.v, 0);
-  box.appendChild(card("Опади, мм", barChart(rain, hours <= 24 ? "за годину" : "за 6 год"), "усього " + fmt(total) + " мм"));
+  // Напруга мережі — останнім; графік з'являється, лише якщо сервіс віддає напругу (PUBLIC_VOLT=1)
+  if (rows.some((r) => r[COL.volt] !== null)) {
+    box.appendChild(card("Напруга мережі, В", lineChart(rows, [{ i: COL.volt, color: "var(--c-volt)", name: "Напруга", unit: "В" }], { dec: 0 }), "норма 207–253 В"));
+  }
 }
 
 function card(title, el, small) {
@@ -388,3 +393,4 @@ load();
 </script>
 </body>
 </html>
+аа
