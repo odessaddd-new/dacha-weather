@@ -3,10 +3,11 @@
 <!--
   ============================================================================================
   «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
-  ВЕРСІЯ СТОРІНКИ: 1.2.0 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ВЕРСІЯ СТОРІНКИ: 1.3.0 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
   ============================================================================================
   Що змінилось:
-    1.2.0  Опади — одразу після температури; графік «Напруга мережі» — останнім (з'являється, лише якщо
+    1.3.0  Графік напруги розфарбовано за зонами: 🟡 нижче 207 В, 🟢 норма 207–253 В, 🔴 вище 253 В; пунктирні межі зон.
+    1.2.0  Опади — одразу після температури; графік «Напруга» — останнім і РІЗНОКОЛЬОРОВИЙ (🟡 нижче 207 В, 🟢 норма, 🔴 вище 253 В) (з'являється, лише якщо
            в Apps Script увімкнено PUBLIC_VOLT=1); у підвалі видно версію сторінки.
     1.1.0  (скасовано) знімок раз на хвилину.
     1.0.x  Перший випуск: поточна погода, кнопка «Надіслати мені погоду», графіки 24 год / 7 діб.
@@ -109,7 +110,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.2.0 (27.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.3.0 (27.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -119,7 +120,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.2.0 (27.10.2026)";
+const PAGE_VERSION = "1.3.0 (27.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -207,7 +208,8 @@ function render() {
     { i: COL.wind, color: "var(--c-wind)", name: "Вітер", unit: "м/с" }], { dec: 1, min0: true })));
   // Напруга мережі — останнім; графік з'являється, лише якщо сервіс віддає напругу (PUBLIC_VOLT=1)
   if (rows.some((r) => r[COL.volt] !== null)) {
-    box.appendChild(card("Напруга мережі, В", lineChart(rows, [{ i: COL.volt, color: "var(--c-volt)", name: "Напруга", unit: "В" }], { dec: 0 }), "норма 207–253 В"));
+    box.appendChild(card("Напруга, В", lineChart(rows, [{ i: COL.volt, color: "var(--ok)", name: "Напруга", unit: "В" }],
+      { dec: 0, zones: { low: 207, high: 253, near: 12 } }), "🟡 <207 · 🟢 норма · 🔴 >253"));
   }
 }
 
@@ -284,7 +286,7 @@ function timeAxis(svg, t0, t1, x) {
 }
 
 // lineChart(rows, series, o): лінійний графік. series — список ліній {i: стовпець, color, name, unit};
-// o.dec — знаків після коми, o.min0 — починати вісь з нуля. Пропуск у даних дає розрив лінії.
+// o.dec — знаків після коми, o.min0 — починати вісь з нуля, o.zones {low, high, near} — розфарбувати лінію за зонами (напруга). Пропуск у даних дає розрив лінії.
 function lineChart(rows, series, o) {
   const wrap = document.createElement("div");
   const pts = rows.filter((r) => series.some((s) => r[s.i] !== null));
@@ -294,6 +296,11 @@ function lineChart(rows, series, o) {
   let lo = Infinity, hi = -Infinity;
   for (const r of pts) for (const s of series) { const v = r[s.i]; if (v !== null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
   if (o.min0) lo = Math.min(lo, 0);
+  // Зони (напруга): межі норми включаємо в діапазон осі, якщо дані підходять до них ближче ніж на o.zones.near
+  if (o.zones) {
+    if (lo - o.zones.low < o.zones.near) lo = Math.min(lo, o.zones.low - 2);
+    if (o.zones.high - hi < o.zones.near) hi = Math.max(hi, o.zones.high + 2);
+  }
   const ticks = niceTicks(lo, hi, 4);
   lo = ticks[0]; hi = ticks[ticks.length - 1];
   const x = (t) => PL + (t - t0) / Math.max(1, t1 - t0) * (W - PL - PR);
@@ -306,6 +313,18 @@ function lineChart(rows, series, o) {
     tx.textContent = (+v.toFixed(o.dec)).toString();
   }
   const GAP = (hours <= 24 ? 40 : 50) * 60;   // пропуск у даних — розрив лінії, а не «домальована» пряма
+  // Межі зон (напруга): пунктир на рівнях «нижче норми» і «вище норми», якщо вони потрапляють у видиму частину осі
+  if (o.zones) {
+    for (const lv of [o.zones.low, o.zones.high]) {
+      if (lv > lo && lv < hi) el("line", { x1: PL, x2: W - PR, y1: y(lv), y2: y(lv), stroke: "var(--hint)", "stroke-width": 1, "stroke-dasharray": "4 4", opacity: .7 }, svg);
+    }
+  }
+  if (o.zones) {
+    drawZoneLine(svg, rows, series[0].i, x, y, GAP, o.zones);
+    attachTip(svg, rows, series, x, y, o);
+    wrap.appendChild(svg);
+    return wrap;
+  }
   for (const s of series) {
     let d = "", prevT = null;
     for (const r of rows) {
@@ -320,6 +339,37 @@ function lineChart(rows, series, o) {
   attachTip(svg, rows, series, x, y, o);
   wrap.appendChild(svg);
   return wrap;
+}
+
+// ===== РІЗНОКОЛЬОРОВА ЛІНІЯ ПО ЗОНАХ (графік «Напруга мережі») =====
+// zoneColor(v, z): колір значення — нижче норми (жовтий 🟡), норма (зелений 🟢), вище норми (червоний 🔴).
+function zoneColor(v, z) { return v < z.low ? "var(--c-volt)" : v > z.high ? "var(--bad)" : "var(--ok)"; }
+// drawZoneLine(): малює лінію окремими відрізками; там, де значення перетинає межу зони, відрізок ділиться в точці
+// перетину, щоб колір змінювався рівно на межі. Пропуск у даних (більше GAP) — розрив лінії.
+function drawZoneLine(svg, rows, col, x, y, GAP, z) {
+  let prev = null;
+  const seg = (t1, v1, t2, v2) => {
+    // точки перетину відрізка з межами зон
+    const cuts = [0, 1];
+    for (const lv of [z.low, z.high]) {
+      if ((v1 - lv) * (v2 - lv) < 0) cuts.push((lv - v1) / (v2 - v1));
+    }
+    cuts.sort((a, b) => a - b);
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const a = cuts[k], b = cuts[k + 1];
+      if (b - a < 1e-6) continue;
+      const ta = t1 + (t2 - t1) * a, tb = t1 + (t2 - t1) * b;
+      const va = v1 + (v2 - v1) * a, vb = v1 + (v2 - v1) * b;
+      el("line", { x1: x(ta), y1: y(va), x2: x(tb), y2: y(vb), stroke: zoneColor((va + vb) / 2, z),
+        "stroke-width": 2.4, "stroke-linecap": "round" }, svg);
+    }
+  };
+  for (const r of rows) {
+    const v = r[col], t = r[COL.ts];
+    if (v === null) { prev = null; continue; }
+    if (prev && t - prev.t <= GAP) seg(prev.t, prev.v, t, v);
+    prev = { t, v };
+  }
 }
 
 // barChart(buckets, unitLabel): стовпчики (використовується для опадів).
