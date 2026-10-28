@@ -3,9 +3,12 @@
 <!--
   ============================================================================================
   «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
-  ВЕРСІЯ СТОРІНКИ: 1.3.0 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ВЕРСІЯ СТОРІНКИ: 1.5.0 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
   ============================================================================================
   Що змінилось:
+    1.5.0  Лічильник відкриттів: при запуску сторінка надсилає в сервіс «відкрито» (без видимих змін для людини); власник раз на тиждень отримує зведення.
+    1.4.0  Тиск розфарбовано як у звітах (🟡 <755, 🟢 755–765, 🔴 >765 мм); температура змінює колір на 0 °C (синя — мінус, помаранчева — плюс).
+    1.3.1  Опади: дощ, що випав під час пропуску зв'язку, більше не потрапляє в один стовпчик — він показується підписом «з них ≈ X мм за час без зв'язку».
     1.3.0  Графік напруги розфарбовано за зонами: 🟡 нижче 207 В, 🟢 норма 207–253 В, 🔴 вище 253 В; пунктирні межі зон.
     1.2.0  Опади — одразу після температури; графік «Напруга» — останнім і РІЗНОКОЛЬОРОВИЙ (🟡 нижче 207 В, 🟢 норма, 🔴 вище 253 В) (з'являється, лише якщо
            в Apps Script увімкнено PUBLIC_VOLT=1); у підвалі видно версію сторінки.
@@ -23,6 +26,7 @@
                                    lineChart()              — лінійний графік (температура, тиск, вітер, напруга)
                                    barChart()               — стовпчики (опади)
                                    showTip(), attachTip()   — підказка при дотику
+              ЛІЧИЛЬНИК:           countOpen()              — повідомляє сервісу, що сторінку відкрито
               КНОПКА:              updateButton(), sendRequest() — «Надіслати мені погоду»
     ПОРЯДОК ГРАФІКІВ задається у render(): Температура → Опади → Тиск → Вітер → Напруга мережі.
     Щоб змінити порядок — переставте відповідні рядки box.appendChild(card(...)) у render().
@@ -49,6 +53,7 @@
     --c-gust: #9bb7c4;
     --c-rain: #3b86c9;
     --c-volt: #d4a017;
+    --c-frost: #2f7fd8;
     --grid: rgba(120, 140, 160, .25);
   }
   @media (prefers-color-scheme: dark) {
@@ -110,7 +115,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.3.0 (27.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.5.0 (27.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -120,7 +125,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.3.0 (27.10.2026)";
+const PAGE_VERSION = "1.5.0 (27.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -198,11 +203,15 @@ function render() {
 
   const box = $("charts");
   box.innerHTML = "";
-  box.appendChild(card("Температура, °C", lineChart(rows, [{ i: COL.temp, color: "var(--c-temp)", name: "Температура", unit: "°C" }], { dec: 1 })));
+  box.appendChild(card("Температура, °C", lineChart(rows, [{ i: COL.temp, color: "var(--c-temp)", name: "Температура", unit: "°C" }],
+    // лінія змінює колір на 0 °C: синя — мінус, помаранчева — плюс (high=1e9: верхньої межі немає)
+    { dec: 1, zones: { low: 0, high: 1e9, near: 3, colors: { low: "var(--c-frost)", ok: "var(--c-temp)", high: "var(--c-temp)" } } }), "🔵 мінус · 🟠 плюс"));
   const rain = rainBuckets(rows, hours <= 24 ? 3600 : 6 * 3600);
   const total = rain.reduce((s, b) => s + b.v, 0);
-  box.appendChild(card("Опади, мм", barChart(rain, hours <= 24 ? "за годину" : "за 6 год"), "усього " + fmt(total) + " мм"));
-  box.appendChild(card("Тиск, мм рт. ст.", lineChart(rows, [{ i: COL.press, color: "var(--c-press)", name: "Тиск", unit: "мм" }], { dec: 0 })));
+  box.appendChild(card("Опади, мм", barChart(rain, hours <= 24 ? "за годину" : "за 6 год"), "усього " + fmt(total + (rain.gapMm || 0)) + " мм" + (rain.gapMm > 0.05 ? " · з них ≈ " + fmt(rain.gapMm) + " мм за час без зв'язку (без стовпчиків)" : "")));
+  box.appendChild(card("Тиск, мм рт. ст.", lineChart(rows, [{ i: COL.press, color: "var(--c-press)", name: "Тиск", unit: "мм" }],
+    // ті самі межі, що й у звітах: нижче 755 — 🟡, 755–765 — 🟢, вище 765 — 🔴
+    { dec: 0, zones: { low: 755, high: 765, near: 3 } }), "🟡 <755 · 🟢 норма · 🔴 >765"));
   box.appendChild(card("Вітер, м/с", lineChart(rows, [
     { i: COL.gust, color: "var(--c-gust)", name: "Пориви", unit: "м/с" },
     { i: COL.wind, color: "var(--c-wind)", name: "Вітер", unit: "м/с" }], { dec: 1, min0: true })));
@@ -227,22 +236,30 @@ function card(title, el, small) {
 
 // ===== ДАНІ ДЛЯ ГРАФІКІВ =====
 // ---- опади за інтервалами з приростів добового лічильника (скидання лічильника — приріст = нове значення)
+// Якщо між двома знімками був пропуск (зв'язок пропав), приріст за цей час НЕ відносимо до одного стовпчика:
+// невідомо, коли саме йшов дощ. Його сума збирається окремо в res.gapMm і показується підписом під заголовком.
 function rainBuckets(rows, step) {
   const out = new Map();
-  let prev = null;
+  const GAPS = (hours <= 24 ? 40 : 50) * 60;     // той самий поріг розриву, що й для ліній
+  let prev = null, prevTs = null, gapMm = 0;
   for (const r of rows) {
     const ts = r[COL.ts], cur = r[COL.rain_day];
-    if (cur === null) { prev = null; continue; }
+    if (cur === null) { prev = null; prevTs = null; continue; }
     if (prev !== null) {
       const inc = cur >= prev ? cur - prev : cur;
       if (inc > 0 && inc < 100) {
-        const k = Math.floor(ts / step) * step;
-        out.set(k, (out.get(k) || 0) + inc);
+        if (ts - prevTs > GAPS) {
+          gapMm += inc;                          // пропуск у даних
+        } else {
+          const k = Math.floor(ts / step) * step;
+          out.set(k, (out.get(k) || 0) + inc);
+        }
       }
     }
-    prev = cur;
+    prev = cur; prevTs = ts;
   }
   const res = [];
+  res.gapMm = gapMm;
   if (!rows.length) return res;
   const first = Math.floor(rows[0][COL.ts] / step) * step, last = Math.floor(rows[rows.length - 1][COL.ts] / step) * step;
   for (let k = first; k <= last; k += step) res.push({ t: k, v: out.get(k) || 0 });
@@ -286,7 +303,7 @@ function timeAxis(svg, t0, t1, x) {
 }
 
 // lineChart(rows, series, o): лінійний графік. series — список ліній {i: стовпець, color, name, unit};
-// o.dec — знаків після коми, o.min0 — починати вісь з нуля, o.zones {low, high, near} — розфарбувати лінію за зонами (напруга). Пропуск у даних дає розрив лінії.
+// o.dec — знаків після коми, o.min0 — починати вісь з нуля, o.zones {low, high, near, colors?} — розфарбувати лінію за зонами (температура, тиск, напруга). Пропуск у даних дає розрив лінії.
 function lineChart(rows, series, o) {
   const wrap = document.createElement("div");
   const pts = rows.filter((r) => series.some((s) => r[s.i] !== null));
@@ -341,9 +358,13 @@ function lineChart(rows, series, o) {
   return wrap;
 }
 
-// ===== РІЗНОКОЛЬОРОВА ЛІНІЯ ПО ЗОНАХ (графік «Напруга мережі») =====
-// zoneColor(v, z): колір значення — нижче норми (жовтий 🟡), норма (зелений 🟢), вище норми (червоний 🔴).
-function zoneColor(v, z) { return v < z.low ? "var(--c-volt)" : v > z.high ? "var(--bad)" : "var(--ok)"; }
+// ===== РІЗНОКОЛЬОРОВА ЛІНІЯ ПО ЗОНАХ (графіки «Температура», «Тиск», «Напруга») =====
+// zoneColor(v, z): колір значення за зонами z {low, high, colors?}: нижче low / між / вище high.
+// Типові кольори — 🟡 нижче норми, 🟢 норма, 🔴 вище норми; для температури задано свої (синій мінус, помаранчевий плюс).
+function zoneColor(v, z) {
+  const c = z.colors || { low: "var(--c-volt)", ok: "var(--ok)", high: "var(--bad)" };   // типово: 🟡 нижче, 🟢 норма, 🔴 вище
+  return v < z.low ? c.low : v > z.high ? c.high : c.ok;
+}
 // drawZoneLine(): малює лінію окремими відрізками; там, де значення перетинає межу зони, відрізок ділиться в точці
 // перетину, щоб колір змінювався рівно на межі. Пропуск у даних (більше GAP) — розрив лінії.
 function drawZoneLine(svg, rows, col, x, y, GAP, z) {
@@ -434,7 +455,18 @@ function attachTip(svg, rows, series, x, y, o) {
   svg.addEventListener("pointermove", (e) => { if (e.pressure > 0 || e.pointerType === "mouse") pick(e); });
 }
 
-// ---- кнопка «Надіслати мені погоду»
+// ===== ЛІЧИЛЬНИК ВІДКРИТТІВ =====
+// countOpen(): один раз при запуску сторінки повідомляє сервісу, що її відкрили (action="hit"). Для людей із Telegram
+// додається підписаний initData — сервіс рахує різних людей за скороченим відбитком, імена не зберігаються.
+// Помилки ігноруються: лічильник ніколи не заважає роботі сторінки.
+function countOpen() {
+  if (!API_URL || API_URL.indexOf("PASTE_") === 0) return;
+  try {
+    fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, keepalive: true,
+      body: JSON.stringify({ action: "hit", app: "weather", initData: (tg && tg.initData) || "" }) }).catch(() => {});
+  } catch (e) { /* ігноруємо */ }
+}
+
 // ===== КНОПКА «Надіслати мені погоду» =====
 // updateButton(): вмикає/вимикає кнопку (працює лише коли сторінку відкрито з Telegram) і показує підказку під нею.
 function updateButton() {
@@ -444,7 +476,7 @@ function updateButton() {
   b.disabled = !(inTg && ready);
   if (!inTg) setNote("Щоб отримати погоду в чат, відкрийте цю сторінку з Telegram. Якщо ви вже в Telegram, а кнопка недоступна — Telegram не передав дані користувача (діагностика: initData порожній).", "");
   else if (!$("note").textContent) setNote(showName
-    ? ""
+    ? "Адміністратор каналу побачить ваше ім'я та нік у Telegram, коли ви надсилаєте запит."
     : "Адміністратор каналу побачить, що хтось надіслав запит (без імені).", "");
 }
 
@@ -491,6 +523,7 @@ $("seg").addEventListener("click", (e) => {
   for (const b of $("seg").children) b.classList.toggle("on", b === e.target);
   load();
 });
+countOpen();
 load();
 </script>
 </body>
