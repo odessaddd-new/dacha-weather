@@ -17,7 +17,7 @@
     1.0.x  Перший випуск: поточна погода, кнопка «Надіслати мені погоду», графіки 24 год / 7 діб.
 
   КАРТА СТОРІНКИ (де що шукати нижче в коді):
-    HTML      <main> — заголовок, блок «зараз» (#now), кнопка (#send), перемикач 24 год/7 діб (#seg),
+    HTML      <main> — заголовок, блок «зараз» (#now), кнопка (#send), рядок «‹ Сьогодні › [7 діб]» (#daynav),
               контейнер графіків (#charts), підвал (#foot) з версією.
     СКРИПТ    ЗАВАНТАЖЕННЯ ДАНИХ:  api(), load()            — запит історії в Apps Script
               ВИВЕДЕННЯ:           render()                 — блок «зараз» + ПОРЯДОК ГРАФІКІВ (див. нижче)
@@ -66,12 +66,11 @@
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
     font: 16px/1.4 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
   main { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
-  h1 { font-size: 22px; margin: 4px 0 2px; }
-  .sub { color: var(--label); font-size: 15px; margin-bottom: 14px; }
+  .sub { color: var(--label); font-size: 15px; margin: 6px 0 14px; }
   .ver { opacity: .8; }
   .sub.stale { color: var(--warn); }
   .now { background: var(--card); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: auto 1fr 1fr; gap: 14px 10px; }
-  .now .big { grid-row: span 2; display: flex; flex-direction: column; justify-content: center; }
+  .now .big { grid-row: span 2; display: flex; flex-direction: column; justify-content: center; margin-right: 12px; }   /* відступ праворуч від температури */
   .now .big .v { font-size: clamp(38px, 12vw, 54px); white-space: nowrap; font-weight: 700; line-height: 1; }
   .now .big .l { color: var(--label); font-size: 15px; margin-top: 4px; }
   .m .v { font-size: clamp(21px, 6.4vw, 28px); font-weight: 700; line-height: 1.1; white-space: nowrap; }
@@ -83,14 +82,13 @@
   button.cta:disabled { opacity: .55; cursor: default; }
   .note { color: var(--label); font-size: 14px; min-height: 18px; }
   .note.ok { color: var(--ok); } .note.err { color: var(--bad); }
-  .seg { display: inline-flex; background: var(--card); border-radius: 12px; padding: 3px; margin: 18px 0 10px; }
-  .seg button { border: 0; background: transparent; color: var(--text); padding: 7px 16px; border-radius: 9px; font-size: 14px; cursor: pointer; }
-  .seg button.on { background: var(--accent); color: var(--accent-text); }
-  .daynav { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; }
-  .daynav[hidden] { display: none; }
-  .daynav button { border: 0; background: var(--card); color: var(--text); width: 48px; height: 38px; border-radius: 10px; font-size: 22px; line-height: 1; cursor: pointer; }
-  .daynav button:disabled { opacity: .3; cursor: default; }
-  .daynav span { font-size: 15px; font-weight: 600; }
+  /* один рядок: ‹  Сьогодні, дата  ›  ····  [7 діб] */
+  .daynav { display: flex; align-items: center; gap: 6px; margin: 18px 0 10px; }
+  .daynav .arr { border: 0; background: var(--card); color: var(--text); width: 38px; height: 38px; flex: none; border-radius: 10px; font-size: 22px; line-height: 1; cursor: pointer; }
+  .daynav .arr:disabled { opacity: .3; cursor: default; }
+  .daynav #dlabel { font-size: 15px; font-weight: 600; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+  .daynav #wk { margin-left: auto; flex: none; border: 0; background: var(--card); color: var(--text); padding: 0 14px; height: 38px; border-radius: 10px; font-size: 15px; cursor: pointer; }
+  .daynav #wk.on { background: var(--accent); color: var(--accent-text); }
   .card { background: var(--card); border-radius: 16px; padding: 12px 12px 8px; margin-bottom: 12px; }
   .card h2 { font-size: 15px; margin: 0 0 2px; display: flex; justify-content: space-between; align-items: baseline; }
   .card h2 small { color: var(--label); font-weight: 500; font-size: 13px; }
@@ -103,7 +101,6 @@
 </head>
 <body>
 <main>
-  <h1>Погода на дачі</h1>
   <div class="sub" id="updated">Завантаження…</div>
 
   <section class="now" id="now" hidden>
@@ -118,18 +115,15 @@
   <button class="cta" id="send" disabled>📩 Надіслати мені погоду</button>
   <div class="note" id="note"></div>
 
-  <div class="seg" id="seg">
-    <button data-h="24" class="on">Сьогодні</button>
-    <button data-h="168">7 діб</button>
-  </div>
   <div class="daynav" id="daynav">
-    <button id="dprev" aria-label="Попередній день">‹</button>
+    <button class="arr" id="dprev" aria-label="Попередній день">‹</button>
     <span id="dlabel">Сьогодні</span>
-    <button id="dnext" aria-label="Наступний день">›</button>
+    <button class="arr" id="dnext" aria-label="Наступний день">›</button>
+    <button id="wk" aria-pressed="false">7 діб</button>
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.6.0 (28.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.6.1 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -139,7 +133,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.6.0 (28.10.2026)";
+const PAGE_VERSION = "1.6.1 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -178,10 +172,17 @@ function dayBounds(off) {
   const a = new Date(Date.UTC(n.year, n.month - 1, n.day - off)), b = new Date(Date.UTC(n.year, n.month - 1, n.day - off + 1));
   return { t0: kyivMidnight(a.getUTCFullYear(), a.getUTCMonth() + 1, a.getUTCDate()), t1: kyivMidnight(b.getUTCFullYear(), b.getUTCMonth() + 1, b.getUTCDate()), date: a };
 }
-// updateNav(): показує/ховає рядок зі стрілками і підписує день.
+// updateNav(): підписує день і вмикає/вимикає стрілки; у режимі «7 діб» стрілки неактивні, кнопка «7 діб» підсвічена.
 function updateNav() {
-  $("daynav").hidden = hours > 24;
-  if (hours > 24) return;
+  const week = hours > 24;
+  $("wk").classList.toggle("on", week);
+  $("wk").setAttribute("aria-pressed", week ? "true" : "false");
+  if (week) {
+    $("dlabel").textContent = "Останні 7 діб";
+    $("dprev").disabled = true;
+    $("dnext").disabled = true;
+    return;
+  }
   const d = dayBounds(dayOff).date;
   const txt = d.toLocaleDateString("uk-UA", { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" });
   $("dlabel").textContent = dayOff === 0 ? "Сьогодні, " + txt : dayOff === 1 ? "Вчора, " + txt : txt;
@@ -581,12 +582,10 @@ async function sendRequest(retry) {
 }
 
 $("send").addEventListener("click", () => sendRequest(false));
-$("seg").addEventListener("click", (e) => {
-  const h = e.target && e.target.dataset && e.target.dataset.h;
-  if (!h) return;
-  hours = Number(h);
+// кнопка «7 діб»: перемикач (натиснули — 7 діб, ще раз — повернулись до «Сьогодні»)
+$("wk").addEventListener("click", () => {
+  hours = hours > 24 ? 24 : 168;
   dayOff = 0;
-  for (const b of $("seg").children) b.classList.toggle("on", b === e.target);
   load();
 });
 // стрілки ‹ › у режимі «Сьогодні»: на день назад / вперед
