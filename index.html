@@ -90,6 +90,16 @@
   .daynav #dlabel { font-size: 15px; font-weight: 600; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
   .daynav #wk { margin-left: auto; flex: none; border: 0; background: var(--card); color: var(--text); padding: 0 14px; height: 38px; border-radius: 10px; font-size: 15px; cursor: pointer; }
   .daynav #wk.on { background: var(--accent); color: var(--accent-text); }
+  /* блок «Оголошення» — лише для власника */
+  #ann summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 4px 0 8px; }
+  .annform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-bottom: 8px; }
+  .annform label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--label); }
+  .annform label.wide { grid-column: 1 / -1; }
+  .annform input { font: inherit; font-size: 16px; padding: 9px 10px; border: 1px solid var(--grid); border-radius: 10px; background: var(--bg); color: var(--text); min-width: 0; }
+  .annform button { grid-column: 1 / -1; border: 0; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; cursor: pointer; background: var(--card); color: var(--text); outline: 1px solid var(--grid); }
+  .annform button.pub { background: var(--accent); color: var(--accent-text); outline: 0; }
+  .annform button:disabled { opacity: .55; cursor: default; }
+  .annform .note { grid-column: 1 / -1; }
   .card { background: var(--card); border-radius: 16px; padding: 12px 12px 8px; margin-bottom: 12px; }
   .card h2 { font-size: 15px; margin: 0 0 2px; display: flex; justify-content: space-between; align-items: baseline; }
   .card h2 small { color: var(--label); font-weight: 500; font-size: 13px; }
@@ -125,7 +135,20 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.6 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+
+  <details class="card" id="ann" hidden>
+    <summary>📢 Оголошення про планові роботи ДТЕК</summary>
+    <div class="annform">
+      <label class="wide">Дата<input type="date" id="a-date"></label>
+      <label>З<input type="time" id="a-from"></label>
+      <label>До<input type="time" id="a-to"></label>
+      <button type="button" id="a-prev">Надіслати мені для перегляду</button>
+      <button type="button" id="a-pub" class="pub">Опублікувати в канал</button>
+      <div class="note" id="a-note"></div>
+    </div>
+  </details>
+
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.8.0 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -135,7 +158,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.7.6 (29.10.2026)";
+const PAGE_VERSION = "1.8.0 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -230,6 +253,7 @@ async function load() {
     if (!j.ok) throw new Error(j.error || "api");
     locked = false;
     $("send").hidden = false; $("daynav").hidden = false;
+    $("ann").hidden = !j.owner;          // блок оголошення бачить лише власник (сервіс сам перевіряє це ще раз)
     data = j;
     showName = j.show_name !== false;
     render();
@@ -252,7 +276,7 @@ async function load() {
 function lockUi(text) {
   locked = true;
   $("now").hidden = true; $("raining").hidden = true; $("charts").innerHTML = "";
-  $("send").hidden = true; $("daynav").hidden = true; setNote("", "");
+  $("send").hidden = true; $("daynav").hidden = true; $("ann").hidden = true; setNote("", "");
   $("updated").textContent = text;
   $("updated").className = "sub stale";
 }
@@ -631,6 +655,45 @@ $("wk").addEventListener("click", () => {
 // стрілки ‹ › у режимі «Сьогодні»: на день назад / вперед
 $("dprev").addEventListener("click", () => { if (dayOff < DAY_MAX) { dayOff++; load(); } });
 $("dnext").addEventListener("click", () => { if (dayOff > 0) { dayOff--; load(); } });
+
+// ===== ОГОЛОШЕННЯ (лише власник) =====
+// Дата й час вибираються вікном телефона (input type=date/time). «Перегляд» надсилає текст вам у чат, «Опублікувати» — у канал.
+// Текст оголошення (шаблон) зберігається на сервісі: Code.gs, CFG.ANNOUNCE_TEMPLATE.
+(function () {
+  const dateEl = $("a-date"), fromEl = $("a-from"), toEl = $("a-to"), noteEl = $("a-note");
+  const n = kyivParts(Math.floor(Date.now() / 1000));
+  dateEl.min = n.year + "-" + String(n.month).padStart(2, "0") + "-" + String(n.day).padStart(2, "0");   // не раніше сьогодні
+  function say(text, cls) { noteEl.textContent = text || ""; noteEl.className = "note" + (cls ? " " + cls : ""); }
+  function ask(text) {
+    return new Promise((resolve) => {
+      try {
+        if (tg && tg.showConfirm && tg.isVersionAtLeast && tg.isVersionAtLeast("6.2")) { tg.showConfirm(text, (ok) => resolve(!!ok)); return; }
+      } catch (e) { /* нижче — звичайне вікно */ }
+      resolve(window.confirm(text));
+    });
+  }
+  async function go(mode) {
+    if (!dateEl.value || !fromEl.value || !toEl.value) { say("Виберіть дату й час: з і до.", "err"); return; }
+    if (toEl.value <= fromEl.value) { say("Час «до» має бути пізнішим за час «з».", "err"); return; }
+    const when = dateEl.value.split("-").reverse().join(".") + ", з " + fromEl.value + " до " + toEl.value;
+    if (mode === "publish" && !(await ask("Опублікувати в каналі оголошення: " + when + "?\nЙого побачать усі підписники."))) return;
+    $("a-prev").disabled = $("a-pub").disabled = true;
+    say("Надсилаю…", "");
+    try {
+      const j = await api("", { method: "POST", body: JSON.stringify({ action: "announce", mode, date: dateEl.value, from: fromEl.value, to: toEl.value, initData: (tg && tg.initData) || "" }) });
+      if (j.ok) say(j.dup ? "Це оголошення вже опубліковано щойно." : mode === "publish" ? "✅ Опубліковано в каналі." : "✅ Надіслано вам у чат з ботом.", "ok");
+      else say({
+        not_owner: "Ця дія доступна лише власнику.", auth: "Не вдалося підтвердити, що це ви. Закрийте і відкрийте застосунок знову.",
+        bad_date: "Некоректна дата.", bad_time: "Некоректний час (з має бути раніше за до).",
+        no_channel: "У сервісі не задано канал (властивість CHANNEL_ID).",
+        telegram: "Telegram не прийняв повідомлення" + (j.detail ? ": " + j.detail : ".")
+      }[j.error] || "Не вдалося надіслати. Спробуйте пізніше.", "err");
+    } catch (e) { say("Немає зв'язку з сервісом. Спробуйте пізніше.", "err"); }
+    $("a-prev").disabled = $("a-pub").disabled = false;
+  }
+  $("a-prev").addEventListener("click", () => go("preview"));
+  $("a-pub").addEventListener("click", () => go("publish"));
+})();
 countOpen();
 load();
 </script>
