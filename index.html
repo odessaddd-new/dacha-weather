@@ -69,6 +69,7 @@
   .sub { color: var(--label); font-size: 15px; margin: 6px 0 14px; }
   .ver { opacity: .8; }
   .sub.stale { color: var(--warn); }
+  [hidden] { display: none !important; }   /* атрибут hidden має вигравати в display: grid/flex */
   .now { background: var(--card); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: auto 1fr 1fr; gap: 14px 10px; }
   .now .big { grid-row: span 2; display: flex; flex-direction: column; justify-content: center; margin-right: 12px; }   /* відступ праворуч від температури */
   .now .big .v { font-size: clamp(38px, 12vw, 54px); white-space: nowrap; font-weight: 700; line-height: 1; }
@@ -123,7 +124,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.6.2 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.0 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -133,7 +134,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.6.2 (29.10.2026)";
+const PAGE_VERSION = "1.7.0 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -146,6 +147,7 @@ let hours = 24;          // 24 = режим «Сьогодні» (доба за 
 let dayOff = 0;          // 0 = сьогодні, 1 = вчора, … до DAY_MAX днів назад (історія сервісу — 7 діб)
 const DAY_MAX = 6;
 let win = null;          // вікно графіків {t0, t1} у режимі «Сьогодні»: від 00:00 до 24:00 обраного дня; у режимі «7 діб» — null
+let locked = false;      // сервіс не пустив (не підписник каналу / відкрито не з Telegram): дані й кнопка вимкнені
 let loadSeq = 0;         // номер запиту: відповідь на старіший запит (швидке листання) відкидається
 let data = null;
 let showName = true;
@@ -199,7 +201,7 @@ function agoText(sec) {
 function setNote(text, cls) { const n = $("note"); n.textContent = text || ""; n.className = "note" + (cls ? " " + cls : ""); }
 
 // ===== ЗАВАНТАЖЕННЯ ДАНИХ =====
-// api(): запит до Apps Script (GET ?action=history&hours=…) або POST для кнопки; повертає розібрану JSON-відповідь.
+// api(): запит до Apps Script (POST: історія для графіків і кнопка, з підписаним initData); повертає розібрану JSON-відповідь.
 async function api(path, opts) {
   const r = await fetch(API_URL + path, opts);
   return r.json();
@@ -222,14 +224,27 @@ async function load() {
   }
   updateNav();
   try {
-    const j = await api("?action=history&hours=" + reqH);
+    const j = await api("", { method: "POST", body: JSON.stringify({ action: "history", hours: reqH, initData: (tg && tg.initData) || "" }) });
     if (my !== loadSeq) return;     // за цей час натиснули ще раз — ця відповідь уже не потрібна
     if (!j.ok) throw new Error(j.error || "api");
+    locked = false;
     data = j;
     showName = j.show_name !== false;
     render();
   } catch (e) {
     if (my !== loadSeq) return;
+    const why = {
+      auth: "Відкрийте мініапплікацію з Telegram (за посиланням із каналу або від бота): у браузері дані не показуються.",
+      not_member: "Мініапліковація доступна підписникам каналу «МОЯ ДАЧА Інформканал». Підпишіться на канал і відкрийте її знову."
+    }[e && e.message];
+    if (why) {      // доступ закрито: ховаємо дані, кнопку вимикаємо
+      locked = true;
+      $("now").hidden = true; $("raining").hidden = true; $("charts").innerHTML = "";
+      $("updated").textContent = why;
+      $("updated").className = "sub stale";
+      updateButton();
+      return;
+    }
     $("updated").textContent = "Не вдалося завантажити дані. Спробуйте пізніше.";
     $("updated").className = "sub stale";
   }
@@ -543,9 +558,9 @@ function updateButton() {
   const b = $("send");
   const inTg = !!(tg && tg.initData);
   const ready = API_URL && API_URL.indexOf("PASTE_") !== 0;
-  b.disabled = !(inTg && ready);
+  b.disabled = !(inTg && ready) || locked;
   if (!inTg) setNote("Щоб отримати погоду в чат, відкрийте цю сторінку з Telegram. Якщо ви вже в Telegram, а кнопка недоступна — Telegram не передав дані користувача (діагностика: initData порожній).", "");
-  else if (!$("note").textContent) setNote(showName
+  else if (!locked && !$("note").textContent) setNote(showName
     ? ""
     : "", "");
 }
@@ -575,6 +590,7 @@ async function sendRequest(retry) {
       rate: "Занадто часто: повторіть через " + Math.ceil((j.wait || 600) / 60) + " хв.",
       no_data: "Даних ще немає. Спробуйте трохи пізніше.",
       auth: "Не вдалося підтвердити, що це ви. Закрийте і відкрийте застосунок знову.",
+      not_member: "Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал». Підпишіться на канал і відкрийте застосунок знову.",
       no_write_access: "Бот не може написати вам у чат: дозвольте повідомлення від бота або натисніть «Start» у чаті з ботом.",
       telegram: "Telegram тимчасово не прийняв повідомлення. Спробуйте пізніше."
     }[j.error] || "Не вдалося надіслати. Спробуйте пізніше.";
