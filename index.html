@@ -93,6 +93,7 @@
   .card { background: var(--card); border-radius: 16px; padding: 12px 12px 8px; margin-bottom: 12px; }
   .card h2 { font-size: 15px; margin: 0 0 2px; display: flex; justify-content: space-between; align-items: baseline; }
   .card h2 small { color: var(--label); font-weight: 500; font-size: 13px; }
+  .sw { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin: 0 5px 2px 0; vertical-align: middle; }   /* зразок кольору лінії в підписі картки */
   svg.chart { width: 100%; height: auto; display: block; touch-action: pan-y; }
   .axis text { fill: var(--axis); font-size: 15px; font-weight: 500; }   /* розмір у одиницях viewBox (520 завширшки): на телефоні ≈ 10–11 px */
   .empty { color: var(--hint); text-align: center; padding: 22px 0; font-size: 14px; }
@@ -124,7 +125,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.0 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.1 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -134,7 +135,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.7.0 (29.10.2026)";
+const PAGE_VERSION = "1.7.1 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -290,12 +291,25 @@ function render() {
     { dec: 1, zones: { low: 755, high: 765, near: 3 } }), "🟡 <755 · 🟢 норма · 🔴 >765"));
   box.appendChild(card("Вітер, м/с", lineChart(rows, [
     { i: COL.gust, color: "var(--c-gust)", name: "Пориви", unit: "м/с" },
-    { i: COL.wind, color: "var(--c-wind)", name: "Вітер", unit: "м/с" }], { dec: 1, min0: true })));
+    { i: COL.wind, color: "var(--c-wind)", name: "Вітер", unit: "м/с" }], { dec: 1, min0: true }),
+    legend([["var(--c-gust)", "пориви"], ["var(--c-wind)", "вітер"]])));
   // Напруга мережі — останнім; графік з'являється, лише якщо сервіс віддає напругу (PUBLIC_VOLT=1)
   if (rows.some((r) => r[COL.volt] !== null)) {
     box.appendChild(card("Напруга, В", lineChart(rows, [{ i: COL.volt, color: "var(--ok)", name: "Напруга", unit: "В" }],
       { dec: 0, zones: { low: 207, high: 253, near: 12 } }), "🟡 <207 · 🟢 норма · 🔴 >253"));
   }
+}
+
+// legend(items): підпис «■ пориви · ■ вітер» із зразками кольорів ліній ([[колір, назва], …]); кольори — ті самі змінні, що й у лініях графіка.
+function legend(items) {
+  const f = document.createDocumentFragment();
+  items.forEach(([color, name], i) => {
+    if (i) f.appendChild(document.createTextNode(" · "));
+    const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = color;
+    f.appendChild(sw);
+    f.appendChild(document.createTextNode(name));
+  });
+  return f;
 }
 
 // card(title, el, small): картка з заголовком; small — дрібний підпис праворуч від заголовка.
@@ -304,7 +318,7 @@ function card(title, el, small) {
   c.className = "card";
   const h = document.createElement("h2");
   h.textContent = title;
-  if (small) { const s = document.createElement("small"); s.textContent = small; h.appendChild(s); }
+  if (small) { const s = document.createElement("small"); if (typeof small === "string") s.textContent = small; else s.appendChild(small); h.appendChild(s); }
   c.appendChild(h);
   c.appendChild(el);
   return c;
@@ -561,8 +575,8 @@ function updateButton() {
   b.disabled = !(inTg && ready) || locked;
   if (!inTg) setNote("Щоб отримати погоду в чат, відкрийте цю сторінку з Telegram. Якщо ви вже в Telegram, а кнопка недоступна — Telegram не передав дані користувача (діагностика: initData порожній).", "");
   else if (!locked && !$("note").textContent) setNote(showName
-    ? ""
-    : "", "");
+    ? "Адміністратор каналу побачить ваше ім'я та нік у Telegram, коли ви надсилаєте запит."
+    : "Адміністратор каналу побачить, що хтось надіслав запит (без імені).", "");
 }
 
 // sendRequest(retry): надсилає запит у Apps Script (action=send) з підписаними даними Telegram (initData);
