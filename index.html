@@ -3,9 +3,10 @@
 <!--
   ============================================================================================
   «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
-  ВЕРСІЯ СТОРІНКИ: 1.5.0 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ВЕРСІЯ СТОРІНКИ: 1.5.1 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
   ============================================================================================
   Що змінилось:
+    1.5.1  Крупніші значення у блоці «зараз» (температура 54 px, інші 28 px); підписи і підписи осей графіків темніші й більші (раніше сірі та дрібні).
     1.5.0  Лічильник відкриттів: при запуску сторінка надсилає в сервіс «відкрито» (без видимих змін для людини); власник раз на тиждень отримує зведення.
     1.4.0  Тиск розфарбовано як у звітах (🟡 <755, 🟢 755–765, 🔴 >765 мм); температура змінює колір на 0 °C (синя — мінус, помаранчева — плюс).
     1.3.1  Опади: дощ, що випав під час пропуску зв'язку, більше не потрапляє в один стовпчик — він показується підписом «з них ≈ X мм за час без зв'язку».
@@ -42,6 +43,8 @@
     --card: var(--tg-theme-secondary-bg-color, #f1f4f8);
     --text: var(--tg-theme-text-color, #14212e);
     --hint: var(--tg-theme-hint-color, #6b7c8c);
+    --label: #44566a;   /* підписи: темніші за hint, щоб добре читались */
+    --axis: #3b4b5b;    /* підписи осей графіків */
     --accent: var(--tg-theme-button-color, #2b7fd1);
     --accent-text: var(--tg-theme-button-text-color, #ffffff);
     --warn: #d9822b;
@@ -57,38 +60,44 @@
     --grid: rgba(120, 140, 160, .25);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: var(--tg-theme-bg-color, #17212b); --card: var(--tg-theme-secondary-bg-color, #1f2c3a); --text: var(--tg-theme-text-color, #e8eef4); --hint: var(--tg-theme-hint-color, #8fa1b3); }
+    :root { --bg: var(--tg-theme-bg-color, #17212b); --card: var(--tg-theme-secondary-bg-color, #1f2c3a); --text: var(--tg-theme-text-color, #e8eef4); --hint: var(--tg-theme-hint-color, #8fa1b3); --label: #b9c7d5; --axis: #c8d4e0; }
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
     font: 16px/1.4 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
   main { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
   h1 { font-size: 22px; margin: 4px 0 2px; }
-  .sub { color: var(--hint); font-size: 14px; margin-bottom: 14px; }
+  .sub { color: var(--label); font-size: 15px; margin-bottom: 14px; }
   .ver { opacity: .8; }
   .sub.stale { color: var(--warn); }
-  .now { background: var(--card); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 10px 12px; }
+  .now { background: var(--card); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: auto 1fr 1fr; gap: 14px 10px; }
   .now .big { grid-row: span 2; display: flex; flex-direction: column; justify-content: center; }
-  .now .big .v { font-size: 40px; font-weight: 700; line-height: 1; }
-  .now .big .l { color: var(--hint); font-size: 13px; margin-top: 4px; }
-  .m .v { font-size: 18px; font-weight: 600; }
-  .m .l { color: var(--hint); font-size: 12px; }
+  .now .big .v { font-size: clamp(38px, 12vw, 54px); white-space: nowrap; font-weight: 700; line-height: 1; }
+  .now .big .l { color: var(--label); font-size: 15px; margin-top: 4px; }
+  .m .v { font-size: clamp(21px, 6.4vw, 28px); font-weight: 700; line-height: 1.1; white-space: nowrap; }
+  .m .v .g { font-size: clamp(13px, 3.8vw, 16px); font-weight: 600; color: var(--label); }   /* пориви вітру у дужках — дрібніше */
+  .m .l { color: var(--label); font-size: 14px; }
   .raining { margin-top: 8px; font-weight: 600; color: var(--c-rain); }
   button.cta { width: 100%; margin: 14px 0 6px; padding: 14px 16px; border: 0; border-radius: 14px; font-size: 16px; font-weight: 600;
     background: var(--accent); color: var(--accent-text); cursor: pointer; }
   button.cta:disabled { opacity: .55; cursor: default; }
-  .note { color: var(--hint); font-size: 13px; min-height: 18px; }
+  .note { color: var(--label); font-size: 14px; min-height: 18px; }
   .note.ok { color: var(--ok); } .note.err { color: var(--bad); }
   .seg { display: inline-flex; background: var(--card); border-radius: 12px; padding: 3px; margin: 18px 0 10px; }
   .seg button { border: 0; background: transparent; color: var(--text); padding: 7px 16px; border-radius: 9px; font-size: 14px; cursor: pointer; }
   .seg button.on { background: var(--accent); color: var(--accent-text); }
+  .daynav { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; }
+  .daynav[hidden] { display: none; }
+  .daynav button { border: 0; background: var(--card); color: var(--text); width: 48px; height: 38px; border-radius: 10px; font-size: 22px; line-height: 1; cursor: pointer; }
+  .daynav button:disabled { opacity: .3; cursor: default; }
+  .daynav span { font-size: 15px; font-weight: 600; }
   .card { background: var(--card); border-radius: 16px; padding: 12px 12px 8px; margin-bottom: 12px; }
   .card h2 { font-size: 15px; margin: 0 0 2px; display: flex; justify-content: space-between; align-items: baseline; }
-  .card h2 small { color: var(--hint); font-weight: 400; font-size: 12px; }
+  .card h2 small { color: var(--label); font-weight: 500; font-size: 13px; }
   svg.chart { width: 100%; height: auto; display: block; touch-action: pan-y; }
-  .axis text { fill: var(--hint); font-size: 10px; }
+  .axis text { fill: var(--axis); font-size: 15px; font-weight: 500; }   /* розмір у одиницях viewBox (520 завширшки): на телефоні ≈ 10–11 px */
   .empty { color: var(--hint); text-align: center; padding: 22px 0; font-size: 14px; }
-  footer { color: var(--hint); font-size: 12px; margin-top: 16px; }
+  footer { color: var(--label); font-size: 13px; margin-top: 16px; }
   .tip { position: fixed; pointer-events: none; background: var(--text); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 8px; opacity: 0; transition: opacity .1s; z-index: 5; white-space: nowrap; }
 </style>
 </head>
@@ -110,12 +119,17 @@
   <div class="note" id="note"></div>
 
   <div class="seg" id="seg">
-    <button data-h="24" class="on">24 години</button>
+    <button data-h="24" class="on">Сьогодні</button>
     <button data-h="168">7 діб</button>
+  </div>
+  <div class="daynav" id="daynav">
+    <button id="dprev" aria-label="Попередній день">‹</button>
+    <span id="dlabel">Сьогодні</span>
+    <button id="dnext" aria-label="Наступний день">›</button>
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.5.0 (27.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.6.0 (28.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -125,7 +139,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.5.0 (27.10.2026)";
+const PAGE_VERSION = "1.6.0 (28.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -134,13 +148,46 @@ if (tg) { try { tg.ready(); tg.expand(); } catch (e) {} }
 const $ = (id) => document.getElementById(id);
 // Номери стовпців у рядку історії (у тому ж порядку, що заголовки аркуша «snapshots» у таблиці).
 const COL = { ts: 0, temp: 1, hum: 2, press: 3, wind: 4, gust: 5, rain_1h: 6, rain_day: 7, raining: 8, night_min: 9, volt: 10, st_ok: 11 };
-let hours = 24;
+let hours = 24;          // 24 = режим «Сьогодні» (доба за київським часом, з листанням по днях), 168 = «7 діб»
+let dayOff = 0;          // 0 = сьогодні, 1 = вчора, … до DAY_MAX днів назад (історія сервісу — 7 діб)
+const DAY_MAX = 6;
+let win = null;          // вікно графіків {t0, t1} у режимі «Сьогодні»: від 00:00 до 24:00 обраного дня; у режимі «7 діб» — null
+let loadSeq = 0;         // номер запиту: відповідь на старіший запит (швидке листання) відкидається
 let data = null;
 let showName = true;
 
 function fmt(n, d = 1) { return (n === null || n === undefined || !isFinite(n)) ? "—" : Number(n).toFixed(d); }
 function hhmm(ts) { return new Date(ts * 1000).toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Kyiv" }); }
 function dayLabel(ts) { return new Date(ts * 1000).toLocaleDateString("uk-UA", { weekday: "short", day: "numeric", timeZone: "Europe/Kyiv" }); }
+// ---- доба за київським часом (незалежно від поясу телефона)
+function kyivParts(ts) {
+  const o = {};
+  for (const p of new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Kyiv", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date(ts * 1000))) o[p.type] = +p.value;
+  o.hour = o.hour % 24;
+  return o;
+}
+function kyivOffset(ts) { const o = kyivParts(ts); return Date.UTC(o.year, o.month - 1, o.day, o.hour, o.minute, o.second) / 1000 - ts; }
+function kyivMidnight(y, m, d) {   // момент 00:00 за Києвом (враховує перехід на зимовий/літній час)
+  const g = Date.UTC(y, m - 1, d) / 1000;
+  return g - kyivOffset(g - kyivOffset(g));
+}
+// dayBounds(off): {t0, t1, date} — початок і кінець доби «off днів тому»; date — календарна дата (UTC-об'єкт для підпису).
+function dayBounds(off) {
+  const n = kyivParts(Math.floor(Date.now() / 1000));
+  const a = new Date(Date.UTC(n.year, n.month - 1, n.day - off)), b = new Date(Date.UTC(n.year, n.month - 1, n.day - off + 1));
+  return { t0: kyivMidnight(a.getUTCFullYear(), a.getUTCMonth() + 1, a.getUTCDate()), t1: kyivMidnight(b.getUTCFullYear(), b.getUTCMonth() + 1, b.getUTCDate()), date: a };
+}
+// updateNav(): показує/ховає рядок зі стрілками і підписує день.
+function updateNav() {
+  $("daynav").hidden = hours > 24;
+  if (hours > 24) return;
+  const d = dayBounds(dayOff).date;
+  const txt = d.toLocaleDateString("uk-UA", { weekday: "short", day: "2-digit", month: "2-digit", timeZone: "UTC" });
+  $("dlabel").textContent = dayOff === 0 ? "Сьогодні, " + txt : dayOff === 1 ? "Вчора, " + txt : txt;
+  $("dprev").disabled = dayOff >= DAY_MAX;
+  $("dnext").disabled = dayOff <= 0;
+}
 function agoText(sec) {
   const m = Math.round(sec / 60);
   if (m < 1) return "щойно";
@@ -164,13 +211,24 @@ async function load() {
     $("updated").className = "sub stale";
     return;
   }
+  const my = ++loadSeq;
+  let reqH = hours;
+  if (hours <= 24) {       // «Сьогодні»: беремо історію від початку обраної доби (+ 1 год запасу для лічильника опадів)
+    win = dayBounds(dayOff);
+    reqH = Math.min(168, Math.max(2, Math.ceil((Date.now() / 1000 - win.t0) / 3600) + 1));
+  } else {
+    win = null;
+  }
+  updateNav();
   try {
-    const j = await api("?action=history&hours=" + hours);
+    const j = await api("?action=history&hours=" + reqH);
+    if (my !== loadSeq) return;     // за цей час натиснули ще раз — ця відповідь уже не потрібна
     if (!j.ok) throw new Error(j.error || "api");
     data = j;
     showName = j.show_name !== false;
     render();
   } catch (e) {
+    if (my !== loadSeq) return;
     $("updated").textContent = "Не вдалося завантажити дані. Спробуйте пізніше.";
     $("updated").className = "sub stale";
   }
@@ -181,7 +239,9 @@ async function load() {
 // render(): 1) блок «зараз» зверху (з останнього знімка); 2) ГРАФІКИ в порядку:
 //   Температура → Опади → Тиск → Вітер → Напруга мережі (останнім, лише якщо є дані напруги).
 function render() {
-  const rows = data.rows || [];
+  const allRows = data.rows || [];
+  // у режимі «Сьогодні» лінії малюємо лише в межах обраної доби; для опадів беремо всі рядки (потрібен рядок перед початком доби як відлік лічильника)
+  const rows = win ? allRows.filter((r) => r[COL.ts] >= win.t0 && r[COL.ts] < win.t1) : allRows;
   const latest = data.latest;
   if (!latest) {
     $("updated").textContent = "Даних ще немає.";
@@ -197,7 +257,7 @@ function render() {
   $("n-temp").textContent = fmt(latest[COL.temp]) + "°";
   $("n-hum").textContent = latest[COL.hum] === null ? "—" : Math.round(latest[COL.hum]) + " %";
   $("n-press").textContent = fmt(latest[COL.press], 0);
-  $("n-wind").textContent = fmt(latest[COL.wind]) + (latest[COL.gust] !== null ? " (" + fmt(latest[COL.gust]) + ")" : "");
+  $("n-wind").innerHTML = fmt(latest[COL.wind]) + (latest[COL.gust] !== null ? ' <span class="g">(' + fmt(latest[COL.gust]) + ")</span>" : "");   // числа, не користувацький текст
   $("n-rain").textContent = fmt(latest[COL.rain_day]);
   $("raining").hidden = !latest[COL.raining];
 
@@ -206,12 +266,12 @@ function render() {
   box.appendChild(card("Температура, °C", lineChart(rows, [{ i: COL.temp, color: "var(--c-temp)", name: "Температура", unit: "°C" }],
     // лінія змінює колір на 0 °C: синя — мінус, помаранчева — плюс (high=1e9: верхньої межі немає)
     { dec: 1, zones: { low: 0, high: 1e9, near: 3, colors: { low: "var(--c-frost)", ok: "var(--c-temp)", high: "var(--c-temp)" } } }), "🔵 мінус · 🟠 плюс"));
-  const rain = rainBuckets(rows, hours <= 24 ? 3600 : 6 * 3600);
+  const rain = rainBuckets(allRows, hours <= 24 ? 3600 : 6 * 3600);
   const total = rain.reduce((s, b) => s + b.v, 0);
   box.appendChild(card("Опади, мм", barChart(rain, hours <= 24 ? "за годину" : "за 6 год"), "усього " + fmt(total + (rain.gapMm || 0)) + " мм" + (rain.gapMm > 0.05 ? " · з них ≈ " + fmt(rain.gapMm) + " мм за час без зв'язку (без стовпчиків)" : "")));
   box.appendChild(card("Тиск, мм рт. ст.", lineChart(rows, [{ i: COL.press, color: "var(--c-press)", name: "Тиск", unit: "мм" }],
     // ті самі межі, що й у звітах: нижче 755 — 🟡, 755–765 — 🟢, вище 765 — 🔴
-    { dec: 0, zones: { low: 755, high: 765, near: 3 } }), "🟡 <755 · 🟢 норма · 🔴 >765"));
+    { dec: 1, zones: { low: 755, high: 765, near: 3 } }), "🟡 <755 · 🟢 норма · 🔴 >765"));
   box.appendChild(card("Вітер, м/с", lineChart(rows, [
     { i: COL.gust, color: "var(--c-gust)", name: "Пориви", unit: "м/с" },
     { i: COL.wind, color: "var(--c-wind)", name: "Вітер", unit: "м/с" }], { dec: 1, min0: true })));
@@ -245,6 +305,8 @@ function rainBuckets(rows, step) {
   for (const r of rows) {
     const ts = r[COL.ts], cur = r[COL.rain_day];
     if (cur === null) { prev = null; prevTs = null; continue; }
+    if (win && ts >= win.t1) break;                                  // «Сьогодні»: знімки після кінця доби не рахуємо
+    if (win && ts < win.t0) { prev = cur; prevTs = ts; continue; }   // до початку доби — лише відлік для лічильника
     if (prev !== null) {
       const inc = cur >= prev ? cur - prev : cur;
       if (inc > 0 && inc < 100) {
@@ -261,7 +323,9 @@ function rainBuckets(rows, step) {
   const res = [];
   res.gapMm = gapMm;
   if (!rows.length) return res;
-  const first = Math.floor(rows[0][COL.ts] / step) * step, last = Math.floor(rows[rows.length - 1][COL.ts] / step) * step;
+  // «Сьогодні»: стовпчики на всю добу (00:00–24:00), навіть якщо доба ще не закінчилась; «7 діб»: від першого до останнього знімка
+  const first = win ? Math.floor(win.t0 / step) * step : Math.floor(rows[0][COL.ts] / step) * step;
+  const last = win ? Math.floor((win.t1 - 1) / step) * step : Math.floor(rows[rows.length - 1][COL.ts] / step) * step;
   for (let k = first; k <= last; k += step) res.push({ t: k, v: out.get(k) || 0 });
   return res;
 }
@@ -284,20 +348,20 @@ function niceTicks(lo, hi, n) {
   for (let v = a; v <= b + step / 2; v += step) t.push(+v.toFixed(6));
   return t;
 }
-const W = 520, H = 190, PL = 34, PR = 10, PT = 8, PB = 22;
+const W = 520, H = 205, PL = 44, PR = 12, PT = 10, PB = 30;
 
 // timeAxis(): вертикальні лінії та підписи часу (24 год — кожні 6 год; 7 діб — по днях).
 function timeAxis(svg, t0, t1, x) {
   const g = el("g", { class: "axis" }, svg);
   const span = t1 - t0;
   const stepH = hours <= 24 ? 6 : 24;
-  const start = Math.ceil(t0 / (stepH * 3600)) * stepH * 3600;
-  for (let t = start; t <= t1; t += stepH * 3600) {
+  const start = win ? t0 : Math.ceil(t0 / (stepH * 3600)) * stepH * 3600;   // «Сьогодні»: підписи від 00:00 доби (00, 06, 12, 18, 24)
+  for (let t = start; t <= t1 + 60; t += stepH * 3600) {
     const xx = x(t);
     el("line", { x1: xx, x2: xx, y1: PT, y2: H - PB, stroke: "var(--grid)", "stroke-width": 1 }, g);
     const anchor = xx > W - PR - 18 ? "end" : xx < PL + 14 ? "start" : "middle";   // крайні підписи не обрізаються
-    const tx = el("text", { x: xx, y: H - 6, "text-anchor": anchor }, g);
-    tx.textContent = hours <= 24 ? hhmm(t) : dayLabel(t);
+    const tx = el("text", { x: xx, y: H - 8, "text-anchor": anchor }, g);
+    tx.textContent = hours <= 24 ? (win && t >= win.t1 - 60 ? "24:00" : hhmm(t)) : dayLabel(t);
   }
   void span;
 }
@@ -309,7 +373,7 @@ function lineChart(rows, series, o) {
   const pts = rows.filter((r) => series.some((s) => r[s.i] !== null));
   if (pts.length < 2) { wrap.className = "empty"; wrap.textContent = "Недостатньо даних"; return wrap; }
   const svg = el("svg", { viewBox: "0 0 " + W + " " + H, class: "chart" });
-  const t0 = rows[0][COL.ts], t1 = rows[rows.length - 1][COL.ts];
+  const t0 = win ? win.t0 : rows[0][COL.ts], t1 = win ? win.t1 : rows[rows.length - 1][COL.ts];
   let lo = Infinity, hi = -Infinity;
   for (const r of pts) for (const s of series) { const v = r[s.i]; if (v !== null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
   if (o.min0) lo = Math.min(lo, 0);
@@ -326,7 +390,7 @@ function lineChart(rows, series, o) {
   const ga = el("g", { class: "axis" }, svg);
   for (const v of ticks) {
     el("line", { x1: PL, x2: W - PR, y1: y(v), y2: y(v), stroke: "var(--grid)", "stroke-width": 1 }, ga);
-    const tx = el("text", { x: PL - 5, y: y(v) + 3, "text-anchor": "end" }, ga);
+    const tx = el("text", { x: PL - 6, y: y(v) + 5, "text-anchor": "end" }, ga);
     tx.textContent = (+v.toFixed(o.dec)).toString();
   }
   const GAP = (hours <= 24 ? 40 : 50) * 60;   // пропуск у даних — розрив лінії, а не «домальована» пряма
@@ -398,7 +462,8 @@ function barChart(buckets, unitLabel) {
   const wrap = document.createElement("div");
   if (!buckets.length) { wrap.className = "empty"; wrap.textContent = "Недостатньо даних"; return wrap; }
   const svg = el("svg", { viewBox: "0 0 " + W + " " + H, class: "chart" });
-  const t0 = buckets[0].t, t1 = buckets[buckets.length - 1].t + (hours <= 24 ? 3600 : 6 * 3600);
+  const step = hours <= 24 ? 3600 : 6 * 3600;
+  const t0 = win ? win.t0 : buckets[0].t, t1 = win ? win.t1 : buckets[buckets.length - 1].t + step;
   const mx = Math.max(0.5, ...buckets.map((b) => b.v));
   const ticks = niceTicks(0, mx, 4);
   const hi = ticks[ticks.length - 1];
@@ -408,10 +473,10 @@ function barChart(buckets, unitLabel) {
   const ga = el("g", { class: "axis" }, svg);
   for (const v of ticks) {
     el("line", { x1: PL, x2: W - PR, y1: y(v), y2: y(v), stroke: "var(--grid)", "stroke-width": 1 }, ga);
-    const tx = el("text", { x: PL - 5, y: y(v) + 3, "text-anchor": "end" }, ga);
+    const tx = el("text", { x: PL - 6, y: y(v) + 5, "text-anchor": "end" }, ga);
     tx.textContent = (+v.toFixed(1)).toString();
   }
-  const bw = Math.max(1.5, (W - PL - PR) / buckets.length - 1.5);
+  const bw = Math.max(1.5, (W - PL - PR) / Math.max(1, (t1 - t0) / step) - 1.5);
   for (const b of buckets) {
     if (b.v <= 0) continue;
     const r = el("rect", { x: x(b.t) + 0.75, y: y(b.v), width: bw, height: Math.max(1, y(0) - y(b.v)), rx: 1.5, fill: "var(--c-rain)" }, svg);
@@ -520,9 +585,13 @@ $("seg").addEventListener("click", (e) => {
   const h = e.target && e.target.dataset && e.target.dataset.h;
   if (!h) return;
   hours = Number(h);
+  dayOff = 0;
   for (const b of $("seg").children) b.classList.toggle("on", b === e.target);
   load();
 });
+// стрілки ‹ › у режимі «Сьогодні»: на день назад / вперед
+$("dprev").addEventListener("click", () => { if (dayOff < DAY_MAX) { dayOff++; load(); } });
+$("dnext").addEventListener("click", () => { if (dayOff > 0) { dayOff--; load(); } });
 countOpen();
 load();
 </script>
