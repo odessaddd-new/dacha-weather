@@ -125,7 +125,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.3 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.5 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -135,7 +135,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.7.3 (29.10.2026)";
+const PAGE_VERSION = "1.7.5 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -229,27 +229,32 @@ async function load() {
     if (my !== loadSeq) return;     // за цей час натиснули ще раз — ця відповідь уже не потрібна
     if (!j.ok) throw new Error(j.error || "api");
     locked = false;
+    $("send").hidden = false; $("daynav").hidden = false;
     data = j;
     showName = j.show_name !== false;
     render();
   } catch (e) {
     if (my !== loadSeq) return;
     const why = {
-      auth: "Відкрийте мініапплікацію із каналу: у браузері дані не показуються.",
-      not_member: ""
+      auth: "Відкрийте мініапплікацію з Telegram (за посиланням із каналу або від бота): у браузері дані не показуються.",
+      not_member: "Мініапліковація доступна підписникам каналу «МОЯ ДАЧА Інформканал». Підпишіться на канал і відкрийте її знову."
     }[e && e.message];
-    if (why) {      // доступ закрито: ховаємо дані, кнопку вимикаємо
-      locked = true;
-      $("now").hidden = true; $("raining").hidden = true; $("charts").innerHTML = "";
-      $("updated").textContent = why;
-      $("updated").className = "sub stale";
-      updateButton();
-      return;
-    }
-    $("updated").textContent = "Не вдалося завантажити дані. Спробуйте пізніше.";
+    if (why) { lockUi(why); return; }     // доступ закрито: лишається тільки пояснення
+    // інша помилка: у дужках короткий код (якщо є) — він допоможе зрозуміти причину
+    const code = e && /^[a-z_]{2,20}$/.test(e.message || "") ? " (код: " + e.message + ")" : "";
+    $("updated").textContent = "Не вдалося завантажити дані. Спробуйте пізніше." + code;
     $("updated").className = "sub stale";
   }
   updateButton();
+}
+
+// lockUi(text): доступ закрито (не підписник каналу / відкрито не з Telegram) — ховаємо дані, кнопку, стрілки; лишається лише пояснення.
+function lockUi(text) {
+  locked = true;
+  $("now").hidden = true; $("raining").hidden = true; $("charts").innerHTML = "";
+  $("send").hidden = true; $("daynav").hidden = true; setNote("", "");
+  $("updated").textContent = text;
+  $("updated").className = "sub stale";
 }
 
 // ===== ВИВЕДЕННЯ =====
@@ -600,11 +605,12 @@ async function sendRequest(retry) {
       });
       return;
     }
+    if (j.error === "not_member") { lockUi("Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал»"); return; }
     const msg = {
       rate: "Занадто часто: повторіть через " + Math.ceil((j.wait || 600) / 60) + " хв.",
       no_data: "Даних ще немає. Спробуйте трохи пізніше.",
-      auth: "Не вдалося підтвердити, що це ви. Закрийте і відкрийте застосунок знову.",
-      not_member: "Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал». Підпишіться на канал і відкрийте застосунок знову.",
+      auth: "Не вдалося підтвердити",
+      not_member: "Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал»",
       no_write_access: "Бот не може написати вам у чат: дозвольте повідомлення від бота або натисніть «Start» у чаті з ботом.",
       telegram: "Telegram тимчасово не прийняв повідомлення. Спробуйте пізніше."
     }[j.error] || "Не вдалося надіслати. Спробуйте пізніше.";
