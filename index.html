@@ -123,7 +123,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.6.1 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.6.2 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -133,7 +133,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.6.1 (29.10.2026)";
+const PAGE_VERSION = "1.6.2 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -300,6 +300,7 @@ function card(title, el, small) {
 // Якщо між двома знімками був пропуск (зв'язок пропав), приріст за цей час НЕ відносимо до одного стовпчика:
 // невідомо, коли саме йшов дощ. Його сума збирається окремо в res.gapMm і показується підписом під заголовком.
 function rainBuckets(rows, step) {
+  const dayKey = (t) => Math.floor((t + kyivOffset(t)) / 86400);   // номер доби за київським часом
   const out = new Map();
   const GAPS = (hours <= 24 ? 40 : 50) * 60;     // той самий поріг розриву, що й для ліній
   let prev = null, prevTs = null, gapMm = 0;
@@ -309,7 +310,10 @@ function rainBuckets(rows, step) {
     if (win && ts >= win.t1) break;                                  // «Сьогодні»: знімки після кінця доби не рахуємо
     if (win && ts < win.t0) { prev = cur; prevTs = ts; continue; }   // до початку доби — лише відлік для лічильника
     if (prev !== null) {
-      const inc = cur >= prev ? cur - prev : cur;
+      // Лічильник «опади за сьогодні» обнуляється опівночі. Нова календарна доба (за Києвом) — рахуємо все значення, а не різницю
+      // з учорашнім: вчора 2 мм, сьогодні перший знімок 3 мм — це 3 мм (а не 1). Спадання значення — теж скидання.
+      const newDay = dayKey(ts) !== dayKey(prevTs);
+      const inc = (newDay || cur < prev) ? cur : cur - prev;
       if (inc > 0 && inc < 100) {
         if (ts - prevTs > GAPS) {
           gapMm += inc;                          // пропуск у даних
@@ -542,8 +546,8 @@ function updateButton() {
   b.disabled = !(inTg && ready);
   if (!inTg) setNote("Щоб отримати погоду в чат, відкрийте цю сторінку з Telegram. Якщо ви вже в Telegram, а кнопка недоступна — Telegram не передав дані користувача (діагностика: initData порожній).", "");
   else if (!$("note").textContent) setNote(showName
-    ? ""
-    : "", "");
+    ? "Адміністратор каналу побачить ваше ім'я та нік у Telegram, коли ви надсилаєте запит."
+    : "Адміністратор каналу побачить, що хтось надіслав запит (без імені).", "");
 }
 
 // sendRequest(retry): надсилає запит у Apps Script (action=send) з підписаними даними Telegram (initData);
