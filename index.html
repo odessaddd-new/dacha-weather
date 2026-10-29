@@ -125,7 +125,7 @@
   </div>
 
   <div id="charts"></div>
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.5 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.7.6 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -135,7 +135,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.7.5 (29.10.2026)";
+const PAGE_VERSION = "1.7.6 (29.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -605,7 +605,7 @@ async function sendRequest(retry) {
       });
       return;
     }
-    if (j.error === "not_member") { lockUi("Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал»"); return; }
+    if (j.error === "not_member") { lockUi("Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал». Підпишіться на канал і відкрийте застосунок знову."); return; }
     const msg = {
       rate: "Занадто часто: повторіть через " + Math.ceil((j.wait || 600) / 60) + " хв.",
       no_data: "Даних ще немає. Спробуйте трохи пізніше.",
