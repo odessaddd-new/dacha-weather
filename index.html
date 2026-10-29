@@ -546,8 +546,8 @@ function updateButton() {
   b.disabled = !(inTg && ready);
   if (!inTg) setNote("Щоб отримати погоду в чат, відкрийте цю сторінку з Telegram. Якщо ви вже в Telegram, а кнопка недоступна — Telegram не передав дані користувача (діагностика: initData порожній).", "");
   else if (!$("note").textContent) setNote(showName
-    ? "Адміністратор каналу побачить ваше ім'я та нік у Telegram, коли ви надсилаєте запит."
-    : "Адміністратор каналу побачить, що хтось надіслав запит (без імені).", "");
+    ? ""
+    : "", "");
 }
 
 // sendRequest(retry): надсилає запит у Apps Script (action=send) з підписаними даними Telegram (initData);
