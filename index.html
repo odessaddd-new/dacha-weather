@@ -3,7 +3,7 @@
 <!--
   ============================================================================================
   «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
-  ВЕРСІЯ СТОРІНКИ: 1.9.1 (30.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ВЕРСІЯ СТОРІНКИ: 1.9.2 (30.10.2026) — показується внизу сторінки («Версія сторінки …»)
   ============================================================================================
   Що змінилось:
     1.5.1  Крупніші значення у блоці «зараз» (температура 54 px, інші 28 px); підписи і підписи осей графіків темніші й більші (раніше сірі та дрібні).
@@ -108,6 +108,7 @@
   .ohours span { position: absolute; transform: translateX(-50%); }
   .ohours span:first-child { transform: none; } .ohours span:last-child { transform: translateX(-100%); }
   .oday { font-weight: 600; font-size: 15px; margin-top: 12px; }
+  .onf { font-weight: 700; font-size: 14px; }
   .otext { font-size: 14px; margin: 4px 0 2px; }
   .ofoot { font-size: 12.5px; color: var(--label); margin: 10px 0 0; line-height: 1.4; }
   /* блок «Оголошення» — лише для власника */
@@ -170,7 +171,7 @@
     </div>
   </details>
 
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.9.1 (30.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.9.2 (30.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -180,7 +181,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.9.1 (30.10.2026)";
+const PAGE_VERSION = "1.9.2 (30.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -365,7 +366,9 @@ function renderOutages(j) {
   let anyPossible = false;
   dates.forEach((d) => {
     const fact = (j.days || {})[d.iso], poss = (j.possible || {})[d.iso];
-    const title = document.createElement("div"); title.className = "oday"; title.textContent = d.label; wrap.appendChild(title);
+    const title = document.createElement("div"); title.className = "oday"; title.textContent = d.label;
+    if (!fact) { const nf = document.createElement("b"); nf.className = "onf"; nf.textContent = " · Графік НЕ застосовується"; title.appendChild(nf); }
+    wrap.appendChild(title);
     const codes = fact || poss;
     if (codes) { wrap.appendChild(outStrip(codes, d.today)); const h = document.createElement("div"); h.className = "ohours"; for (let x = 0; x <= 24; x += 3) { const sp = document.createElement("span"); sp.textContent = pad(x); sp.style.left = (x / 24 * 100) + "%"; h.appendChild(sp); } wrap.appendChild(h); }
     const tx = document.createElement("div"); tx.className = "otext";
@@ -375,7 +378,7 @@ function renderOutages(j) {
     } else {
       anyPossible = anyPossible || !!poss;
       const pv = poss ? outIntervals(poss, MAY_KIND) : "";
-      tx.textContent = "Графік не опубліковано" + (pv ? " · 🟠 можливі: " + pv : "");
+      tx.textContent = pv ? "🟠 можливі: " + pv : "";
     }
     wrap.appendChild(tx);
   });
