@@ -3,7 +3,7 @@
 <!--
   ============================================================================================
   «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
-  ВЕРСІЯ СТОРІНКИ: 1.9.0 (30.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ВЕРСІЯ СТОРІНКИ: 1.9.1 (30.10.2026) — показується внизу сторінки («Версія сторінки …»)
   ============================================================================================
   Що змінилось:
     1.5.1  Крупніші значення у блоці «зараз» (температура 54 px, інші 28 px); підписи і підписи осей графіків темніші й більші (раніше сірі та дрібні).
@@ -91,20 +91,25 @@
   .daynav #wk { margin-left: auto; flex: none; border: 0; background: var(--card); color: var(--text); padding: 0 14px; height: 38px; border-radius: 10px; font-size: 15px; cursor: pointer; }
   .daynav #wk.on { background: var(--accent); color: var(--accent-text); }
   /* блок «Відключення світла»: дві смуги по 24 години (сьогодні, завтра) */
-  .ostrip { display: flex; height: 26px; border-radius: 6px; overflow: hidden; position: relative; margin: 6px 0 2px; background: var(--grid); }
+  .olegend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin: 2px 0 4px; }
+  .olegend span { display: inline-flex; align-items: center; gap: 6px; }
+  .olegend i { width: 16px; height: 16px; border-radius: 4px; display: inline-block; }
+  .ostrip { display: flex; height: 34px; border-radius: 6px; overflow: hidden; position: relative; margin: 6px 0 0; }
   .oc { flex: 1 1 0; border-right: 1px solid var(--card); }
-  .oc.on { background: var(--ok); opacity: .5; }
-  .oc.off { background: var(--bad); }
-  .oc.h1 { background: linear-gradient(90deg, var(--bad) 50%, rgba(47,158,90,.5) 50%); }
-  .oc.h2 { background: linear-gradient(90deg, rgba(47,158,90,.5) 50%, var(--bad) 50%); }
-  .oc.may { background: var(--warn); opacity: .65; }
-  .oc.mh1 { background: linear-gradient(90deg, var(--warn) 50%, rgba(47,158,90,.5) 50%); }
-  .oc.mh2 { background: linear-gradient(90deg, rgba(47,158,90,.5) 50%, var(--warn) 50%); }
-  .onow { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
-  .ohours { display: flex; justify-content: space-between; font-size: 12px; color: var(--axis); }
-  .oday { font-weight: 600; font-size: 14px; margin-top: 8px; }
-  .otext { font-size: 14px; color: var(--label); margin: 2px 0 6px; }
-  .ofoot { font-size: 12.5px; color: var(--label); margin: 4px 0 6px; }
+  .oc.on, .olegend i.on { background: var(--ok); }
+  .oc.off, .olegend i.off { background: var(--bad); }
+  .oc.may, .olegend i.may { background: var(--warn); }
+  .oc.h1 { background: linear-gradient(90deg, var(--bad) 50%, var(--ok) 50%); }
+  .oc.h2 { background: linear-gradient(90deg, var(--ok) 50%, var(--bad) 50%); }
+  .oc.mh1 { background: linear-gradient(90deg, var(--warn) 50%, var(--ok) 50%); }
+  .oc.mh2 { background: linear-gradient(90deg, var(--ok) 50%, var(--warn) 50%); }
+  .onow { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1px; background: var(--text); box-shadow: 0 0 0 1px var(--card); }
+  .ohours { position: relative; height: 18px; font-size: 12px; color: var(--axis); }
+  .ohours span { position: absolute; transform: translateX(-50%); }
+  .ohours span:first-child { transform: none; } .ohours span:last-child { transform: translateX(-100%); }
+  .oday { font-weight: 600; font-size: 15px; margin-top: 12px; }
+  .otext { font-size: 14px; margin: 4px 0 2px; }
+  .ofoot { font-size: 12.5px; color: var(--label); margin: 10px 0 0; line-height: 1.4; }
   /* блок «Оголошення» — лише для власника */
   #ann summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 4px 0 8px; }
   .annform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-bottom: 8px; }
@@ -165,7 +170,7 @@
     </div>
   </details>
 
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.9.0 (30.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.9.1 (30.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -175,7 +180,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.9.0 (30.10.2026)";
+const PAGE_VERSION = "1.9.1 (30.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -351,6 +356,9 @@ function renderOutages(j) {
     box.appendChild(card("Відключення світла", wrap));
     return;
   }
+  const lg = document.createElement("div"); lg.className = "olegend";
+  lg.innerHTML = '<span><i class="on"></i>світло є</span><span><i class="off"></i>відключення</span><span><i class="may"></i>можливі</span>';
+  wrap.appendChild(lg);
   const n = kyivParts(Math.floor(Date.now() / 1000));
   const pad = (x) => String(x).padStart(2, "0");
   const dates = [0, 1].map((off) => { const d = new Date(Date.UTC(n.year, n.month - 1, n.day + off)); return { iso: d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()), label: (off ? "Завтра" : "Сьогодні") + ", " + pad(d.getUTCDate()) + "." + pad(d.getUTCMonth() + 1), today: !off }; });
@@ -359,23 +367,23 @@ function renderOutages(j) {
     const fact = (j.days || {})[d.iso], poss = (j.possible || {})[d.iso];
     const title = document.createElement("div"); title.className = "oday"; title.textContent = d.label; wrap.appendChild(title);
     const codes = fact || poss;
-    if (codes) { wrap.appendChild(outStrip(codes, d.today)); const h = document.createElement("div"); h.className = "ohours"; ["00", "06", "12", "18", "24"].forEach((x) => { const sp = document.createElement("span"); sp.textContent = x; h.appendChild(sp); }); wrap.appendChild(h); }
+    if (codes) { wrap.appendChild(outStrip(codes, d.today)); const h = document.createElement("div"); h.className = "ohours"; for (let x = 0; x <= 24; x += 3) { const sp = document.createElement("span"); sp.textContent = pad(x); sp.style.left = (x / 24 * 100) + "%"; h.appendChild(sp); } wrap.appendChild(h); }
     const tx = document.createElement("div"); tx.className = "otext";
     if (fact) {
       const iv = outIntervals(fact, OFF_KIND);
-      tx.textContent = iv ? "Відключення: " + iv : "Відключень немає ✅";
+      tx.textContent = iv ? "🔴 Відключення: " + iv : "🟢 Відключень немає";
     } else {
       anyPossible = anyPossible || !!poss;
       const pv = poss ? outIntervals(poss, MAY_KIND) : "";
-      tx.textContent = "Затвердженого графіка немає (відключень не заплановано або його ще не опубліковано)." + (pv ? " Жовтим — типовий тижневий графік, можливі: " + pv + "." : "");
+      tx.textContent = "Графік не опубліковано" + (pv ? " · 🟠 можливі: " + pv : "");
     }
     wrap.appendChild(tx);
   });
   const foot = document.createElement("div"); foot.className = "ofoot";
-  foot.textContent = "Черга " + (j.group || "") + " · Джерело: dtek-oem.com.ua" + (j.updated ? " · оновлено ДТЕК " + j.updated : "") +
+  foot.textContent = (anyPossible ? "Затверджений графік ДТЕК з'являється, коли заплановано відключення. Поки його немає, помаранчевим показано типовий тижневий графік — це лише можливі відключення, не гарантія. " : "") + "Черга " + (j.group || "") + " · Джерело: dtek-oem.com.ua" + (j.updated ? " · оновлено ДТЕК " + j.updated : "") +
     (j.fetched ? " · перевірено " + agoText(Math.floor(Date.now() / 1000) - j.fetched) : "") + (j.stale ? " · ⚠️ дані застарілі: ДТЕК зараз не відповідає" : "");
   wrap.appendChild(foot);
-  box.appendChild(card("Відключення світла, черга " + (j.group || ""), wrap, "🟢 є · 🔴 немає · 🟡 можливі"));
+  box.appendChild(card("Відключення світла, черга " + (j.group || ""), wrap));
 }
 
 // ===== ВИВЕДЕННЯ =====
@@ -730,9 +738,9 @@ async function sendRequest(retry) {
     const msg = {
       rate: "Занадто часто: повторіть через " + Math.ceil((j.wait || 600) / 60) + " хв.",
       no_data: "Даних ще немає. Спробуйте трохи пізніше.",
-      auth: "Не вдалося підтвердити, що це ви. Закрийте і відкрийте застосунок знову.",
+      auth: "Не вдалося підтвердити",
       not_member: "Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал»",
-      no_write_access: "Бот не може написати",
+      no_write_access: "Бот не може написати вам у чат: дозвольте повідомлення від бота або натисніть «Start» у чаті з ботом.",
       telegram: "Telegram тимчасово не прийняв повідомлення. Спробуйте пізніше."
     }[j.error] || "Не вдалося надіслати. Спробуйте пізніше.";
     setNote(msg, "err");
