@@ -3,7 +3,7 @@
 <!--
   ============================================================================================
   «Погода на дачі» — сторінка мініапліковації Telegram (GitHub Pages)
-  ВЕРСІЯ СТОРІНКИ: 1.5.1 (27.10.2026) — показується внизу сторінки («Версія сторінки …»)
+  ВЕРСІЯ СТОРІНКИ: 1.9.0 (30.10.2026) — показується внизу сторінки («Версія сторінки …»)
   ============================================================================================
   Що змінилось:
     1.5.1  Крупніші значення у блоці «зараз» (температура 54 px, інші 28 px); підписи і підписи осей графіків темніші й більші (раніше сірі та дрібні).
@@ -90,6 +90,21 @@
   .daynav #dlabel { font-size: 15px; font-weight: 600; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
   .daynav #wk { margin-left: auto; flex: none; border: 0; background: var(--card); color: var(--text); padding: 0 14px; height: 38px; border-radius: 10px; font-size: 15px; cursor: pointer; }
   .daynav #wk.on { background: var(--accent); color: var(--accent-text); }
+  /* блок «Відключення світла»: дві смуги по 24 години (сьогодні, завтра) */
+  .ostrip { display: flex; height: 26px; border-radius: 6px; overflow: hidden; position: relative; margin: 6px 0 2px; background: var(--grid); }
+  .oc { flex: 1 1 0; border-right: 1px solid var(--card); }
+  .oc.on { background: var(--ok); opacity: .5; }
+  .oc.off { background: var(--bad); }
+  .oc.h1 { background: linear-gradient(90deg, var(--bad) 50%, rgba(47,158,90,.5) 50%); }
+  .oc.h2 { background: linear-gradient(90deg, rgba(47,158,90,.5) 50%, var(--bad) 50%); }
+  .oc.may { background: var(--warn); opacity: .65; }
+  .oc.mh1 { background: linear-gradient(90deg, var(--warn) 50%, rgba(47,158,90,.5) 50%); }
+  .oc.mh2 { background: linear-gradient(90deg, rgba(47,158,90,.5) 50%, var(--warn) 50%); }
+  .onow { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
+  .ohours { display: flex; justify-content: space-between; font-size: 12px; color: var(--axis); }
+  .oday { font-weight: 600; font-size: 14px; margin-top: 8px; }
+  .otext { font-size: 14px; color: var(--label); margin: 2px 0 6px; }
+  .ofoot { font-size: 12.5px; color: var(--label); margin: 4px 0 6px; }
   /* блок «Оголошення» — лише для власника */
   #ann summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 4px 0 8px; }
   .annform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-bottom: 8px; }
@@ -136,6 +151,8 @@
 
   <div id="charts"></div>
 
+  <div id="outbox"></div>
+
   <details class="card" id="ann" hidden>
     <summary>📢 Оголошення про планові роботи ДТЕК</summary>
     <div class="annform">
@@ -148,7 +165,7 @@
     </div>
   </details>
 
-  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.8.0 (29.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
+  <footer id="foot"><span class="ver" id="ver">Версія сторінки 1.9.0 (30.10.2026)</span><br>Дані з метеостанції дачі. Знімок оновлюється приблизно раз на 15 хвилин.</footer>
 </main>
 <div class="tip" id="tip"></div>
 
@@ -158,7 +175,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzxymDp66D5HwsPivSfKU3FBc0a0pQXMEWknC-slrBHMl7hldZNi4Ajw_k9l3aT8aKhVg/exec";
 
 // Версія сторінки (показується внизу; допомагає зрозуміти, чи завантажилась нова версія після оновлення на GitHub).
-const PAGE_VERSION = "1.8.0 (29.10.2026)";
+const PAGE_VERSION = "1.9.0 (30.10.2026)";
 const verEl = document.getElementById("ver"); if (verEl) verEl.textContent = "Версія сторінки " + PAGE_VERSION;
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -257,6 +274,7 @@ async function load() {
     data = j;
     showName = j.show_name !== false;
     render();
+    loadOutages();
   } catch (e) {
     if (my !== loadSeq) return;
     const why = {
@@ -276,9 +294,88 @@ async function load() {
 function lockUi(text) {
   locked = true;
   $("now").hidden = true; $("raining").hidden = true; $("charts").innerHTML = "";
-  $("send").hidden = true; $("daynav").hidden = true; $("ann").hidden = true; setNote("", "");
+  $("send").hidden = true; $("daynav").hidden = true; $("ann").hidden = true; $("outbox").innerHTML = ""; setNote("", "");
   $("updated").textContent = text;
   $("updated").className = "sub stale";
+}
+
+// ===== ГРАФІК ВІДКЛЮЧЕНЬ ДТЕК (блок під графіками) =====
+// Сервіс раз на 15 хв читає офіційну сторінку ДТЕК і віддає для черги (за замовчуванням 6.1): days — затверджені відключення
+// (дата → 24 години: yes/no/first/second), possible — типовий тижневий графік (yes/maybe/mfirst/msecond). Година N = (N-1):00–N:00.
+// Нічого не вигадуємо: немає затвердженого графіка — так і пишемо; немає даних ДТЕК — пишемо «недоступні».
+let outLoaded = false;
+async function loadOutages() {
+  if (outLoaded) return;
+  try {
+    const j = await api("", { method: "POST", body: JSON.stringify({ action: "outages", initData: (tg && tg.initData) || "" }) });
+    if (!j.ok && j.error !== "unavailable") return;     // доступ закрито тощо — блок просто не показуємо
+    outLoaded = !!j.ok;
+    renderOutages(j);
+  } catch (e) { /* блок лишається порожнім; спробуємо при наступному оновленні */ }
+}
+const OFF_KIND = { no: [0, 60], first: [0, 30], second: [30, 60] }, MAY_KIND = { maybe: [0, 60], mfirst: [0, 30], msecond: [30, 60] };
+// outIntervals(codes, kinds): 24 коди → «10:00–14:30, 18:00–19:00» (злиті відрізки) або "".
+function outIntervals(codes, kinds) {
+  const seg = [];
+  codes.forEach((c, i) => {
+    const k = kinds[c]; if (!k) return;
+    const a = i * 60 + k[0], b = i * 60 + k[1];
+    if (seg.length && seg[seg.length - 1][1] === a) seg[seg.length - 1][1] = b; else seg.push([a, b]);
+  });
+  const t = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  return seg.map(([a, b]) => t(a) + "–" + t(b)).join(", ");
+}
+function outStrip(codes, isToday) {
+  const st = document.createElement("div");
+  st.className = "ostrip";
+  codes.forEach((c, i) => {
+    const d = document.createElement("div");
+    d.className = "oc " + ({ yes: "on", no: "off", first: "h1", second: "h2", maybe: "may", mfirst: "mh1", msecond: "mh2" }[c] || "on");
+    d.title = String(i).padStart(2, "0") + ":00–" + String(i + 1).padStart(2, "0") + ":00";
+    st.appendChild(d);
+  });
+  if (isToday) {       // тонка риска «зараз» (за київським часом)
+    const n = kyivParts(Math.floor(Date.now() / 1000)), m = document.createElement("div");
+    m.className = "onow"; m.style.left = ((n.hour * 60 + n.minute) / 1440 * 100).toFixed(2) + "%";
+    st.appendChild(m);
+  }
+  return st;
+}
+function renderOutages(j) {
+  const box = $("outbox");
+  box.innerHTML = "";
+  const wrap = document.createElement("div");
+  if (!j.ok) {
+    wrap.className = "empty";
+    wrap.textContent = "Дані ДТЕК зараз недоступні. Спробуйте пізніше.";
+    box.appendChild(card("Відключення світла", wrap));
+    return;
+  }
+  const n = kyivParts(Math.floor(Date.now() / 1000));
+  const pad = (x) => String(x).padStart(2, "0");
+  const dates = [0, 1].map((off) => { const d = new Date(Date.UTC(n.year, n.month - 1, n.day + off)); return { iso: d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()), label: (off ? "Завтра" : "Сьогодні") + ", " + pad(d.getUTCDate()) + "." + pad(d.getUTCMonth() + 1), today: !off }; });
+  let anyPossible = false;
+  dates.forEach((d) => {
+    const fact = (j.days || {})[d.iso], poss = (j.possible || {})[d.iso];
+    const title = document.createElement("div"); title.className = "oday"; title.textContent = d.label; wrap.appendChild(title);
+    const codes = fact || poss;
+    if (codes) { wrap.appendChild(outStrip(codes, d.today)); const h = document.createElement("div"); h.className = "ohours"; ["00", "06", "12", "18", "24"].forEach((x) => { const sp = document.createElement("span"); sp.textContent = x; h.appendChild(sp); }); wrap.appendChild(h); }
+    const tx = document.createElement("div"); tx.className = "otext";
+    if (fact) {
+      const iv = outIntervals(fact, OFF_KIND);
+      tx.textContent = iv ? "Відключення: " + iv : "Відключень немає ✅";
+    } else {
+      anyPossible = anyPossible || !!poss;
+      const pv = poss ? outIntervals(poss, MAY_KIND) : "";
+      tx.textContent = "Затвердженого графіка немає (відключень не заплановано або його ще не опубліковано)." + (pv ? " Жовтим — типовий тижневий графік, можливі: " + pv + "." : "");
+    }
+    wrap.appendChild(tx);
+  });
+  const foot = document.createElement("div"); foot.className = "ofoot";
+  foot.textContent = "Черга " + (j.group || "") + " · Джерело: dtek-oem.com.ua" + (j.updated ? " · оновлено ДТЕК " + j.updated : "") +
+    (j.fetched ? " · перевірено " + agoText(Math.floor(Date.now() / 1000) - j.fetched) : "") + (j.stale ? " · ⚠️ дані застарілі: ДТЕК зараз не відповідає" : "");
+  wrap.appendChild(foot);
+  box.appendChild(card("Відключення світла, черга " + (j.group || ""), wrap, "🟢 є · 🔴 немає · 🟡 можливі"));
 }
 
 // ===== ВИВЕДЕННЯ =====
@@ -633,9 +730,9 @@ async function sendRequest(retry) {
     const msg = {
       rate: "Занадто часто: повторіть через " + Math.ceil((j.wait || 600) / 60) + " хв.",
       no_data: "Даних ще немає. Спробуйте трохи пізніше.",
-      auth: "Не вдалося підтвердити",
+      auth: "Не вдалося підтвердити, що це ви. Закрийте і відкрийте застосунок знову.",
       not_member: "Погода доступна підписникам каналу «МОЯ ДАЧА Інформканал»",
-      no_write_access: "Бот не може написати вам у чат: дозвольте повідомлення від бота або натисніть «Start» у чаті з ботом.",
+      no_write_access: "Бот не може написати",
       telegram: "Telegram тимчасово не прийняв повідомлення. Спробуйте пізніше."
     }[j.error] || "Не вдалося надіслати. Спробуйте пізніше.";
     setNote(msg, "err");
